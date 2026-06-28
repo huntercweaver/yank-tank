@@ -719,13 +719,16 @@ function parseEvent(ev){
     const away = c.competitors.find(x=>x.homeAway==='away');
     const st = ev.status || c.status;
     const state = st.type.state; // pre | in | post
+    // ESPN returns score as a plain string in some endpoints and as an object
+    // ({value, displayValue}) in others (esp. national-team fixtures). Normalize.
+    const sc = (s)=>{ if(s==null) return ''; if(typeof s==='object') return s.displayValue ?? s.value ?? ''; return s; };
     return {
       id: ev.id,
       date: ev.date,
       comp: (ev.league && ev.league.abbreviation) || (c.notes&&c.notes[0]&&c.notes[0].headline) || (ev.season&&ev.season.slug) || 'Match',
       compName: ev.shortName || '',
-      home:{ name:home.team.shortDisplayName||home.team.displayName, score:home.score, winner:home.winner, logo:home.team.logo },
-      away:{ name:away.team.shortDisplayName||away.team.displayName, score:away.score, winner:away.winner, logo:away.team.logo },
+      home:{ name:home.team.shortDisplayName||home.team.displayName, score:sc(home.score), winner:home.winner, logo:home.team.logo },
+      away:{ name:away.team.shortDisplayName||away.team.displayName, score:sc(away.score), winner:away.winner, logo:away.team.logo },
       state, detail: st.type.shortDetail
     };
   }catch(e){ return null; }
