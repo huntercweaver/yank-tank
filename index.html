@@ -726,6 +726,31 @@ const HEADED = [
    ================================================================ */
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 
+/* Match a club to a fixture team name. ESPN fixtures use short names like
+   "Man City" while our data may say "Manchester City" — matching the first
+   word ("Manchester") silently failed. This keeps a list of fragments per club
+   and matches if any appears in the fixture's team name. */
+const TEAM_ALIASES = {
+  'mancity':['man city','manchester city'],
+  'manchester city':['man city','manchester city'],
+  'milan':['milan'],
+  'ac milan':['milan'],
+  'psv':['psv','eindhoven'],
+  'psv eindhoven':['psv','eindhoven']
+};
+function teamFragments(clubNameOrKey){
+  const k = (clubNameOrKey||'').toLowerCase();
+  if(TEAM_ALIASES[k]) return TEAM_ALIASES[k];
+  // fall back to the longest word (avoids "AC"/"FC" type false matches)
+  const words = k.split(/\s+/).filter(w=>w.length>2 && !['the','fc','ac','cf','sc'].includes(w));
+  return words.length?[words.sort((a,b)=>b.length-a.length)[0]]:[k];
+}
+function fixtureTeamFor(ev, clubNameOrKey){
+  const frags = teamFragments(clubNameOrKey);
+  const hit = (nm)=>{ const n=(nm||'').toLowerCase(); return frags.some(f=>n.includes(f)); };
+  return hit(ev.home.name)?ev.home : (hit(ev.away.name)?ev.away : null);
+}
+
 /* Known USMNT World Cup 2026 path — a safety net so confirmed knockout games
    always show even if ESPN's live feed lags in attaching them to the schedule.
    These are merged with live ESPN data (live data wins once it has the game).
@@ -854,7 +879,7 @@ function parseEvent(ev){
 
 function resultFor(ev, teamName){
   if(ev.state!=='post') return null;
-  const us = ev.home.name===teamName?ev.home:(ev.away.name===teamName?ev.away:null);
+  const us = fixtureTeamFor(ev, teamName);
   if(!us) return null;
   if(us.winner) return 'W';
   const hs=+ev.home.score, as=+ev.away.score;
@@ -955,8 +980,8 @@ function renderHealth(c, evs){
   const done = evs.filter(e=>e.state==='post');
   if(!done.length){ box.innerHTML = `<div class="empty">No completed matches yet this season to compute health.</div>`; return; }
 
-  // last 10 (or fewer) for trend; full season for totals
-  const isUs = (ev)=>{ const key=c.name.toLowerCase().split(' ')[0]; return ev.home.name.toLowerCase().includes(key)?ev.home:(ev.away.name.toLowerCase().includes(key)?ev.away:null); };
+  // match "your team" in a fixture by the club's known name fragments.
+  const isUs = (ev)=> fixtureTeamFor(ev, c.key);
   let W=0,D=0,L=0,GF=0,GA=0, cleanSheets=0, scoredIn=0;
   const formArr=[];
   let curStreak=0, streakType='';
@@ -1513,9 +1538,10 @@ async function loadAction(){
         return (e.state==='pre' || e.state==='in') && t>=now-3*60*60*1000 && t<=weekEnd;
       });
       if(next){
-        const opp = next.home.name.toLowerCase().includes(club.toLowerCase().split(' ')[0])
-          ? next.away.name : next.home.name;
-        const homeAway = next.home.name.toLowerCase().includes(club.toLowerCase().split(' ')[0])?'vs':'@';
+        const mine = fixtureTeamFor(next, club);
+        const isHome = mine === next.home;
+        const opp = isHome ? next.away.name : next.home.name;
+        const homeAway = isHome ? 'vs' : '@';
         POOL.filter(p=>p.club===club).forEach(p=>{
           results.push({ player:p.name, pos:p.pos, club, opp, homeAway, date:next.date, comp:next.compName||'' });
         });
@@ -1655,9 +1681,8 @@ async function upgradePoolForm(){
       let teamName = null;
       const done = evs.filter(e=>e.state==='post');
       for(const e of done){
-        const key = club.toLowerCase().split(' ')[0];
-        if(e.home.name.toLowerCase().includes(key)) { teamName=e.home.name; break; }
-        if(e.away.name.toLowerCase().includes(key)) { teamName=e.away.name; break; }
+        const t = fixtureTeamFor(e, club);
+        if(t){ teamName = t.name; break; }
       }
       if(!teamName) return;
       const form = liveForm(evs, teamName);
