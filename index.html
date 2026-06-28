@@ -24,12 +24,18 @@
     --chalk-faint:#5d6b7a;    /* tertiary */
     --signal:#2f81f7;         /* the rising line — electric blue */
     --signal-soft:rgba(47,129,247,.14);
-    --stars:#e23b4e;          /* stars-and-stripes red, used sparingly */
+    --stars:#e23b4e;          /* stars-and-stripes red */
+    --usa-red:#b31942;        /* Old Glory red */
+    --usa-blue:#0a3161;       /* Old Glory blue */
+    --usa-blue-bright:#2f6fed;
     --gold:#e8b53f;           /* prospect / watch accent */
     --win:#3fb950;
     --draw:#8b949e;
     --loss:#e5534b;
     --radius:14px;
+    /* per-club accent — flipped at runtime when you switch clubs */
+    --club:#6CABDD;
+    --club-soft:rgba(108,171,221,.14);
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
@@ -49,18 +55,37 @@
   /* ---------- Masthead ---------- */
   header.masthead{
     border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg,var(--field-2),var(--field));
-    padding:26px 20px 22px;
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgba(47,111,237,.18), transparent 55%),
+      radial-gradient(90% 120% at 0% 0%, rgba(179,25,66,.16), transparent 55%),
+      linear-gradient(180deg,var(--field-2),var(--field));
+    padding:26px 20px 24px;
     position:relative;
     overflow:hidden;
   }
-  /* the rising line motif behind the title */
-  header.masthead::after{
-    content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
-    background:linear-gradient(90deg,transparent,var(--signal) 70%,var(--stars));
-    opacity:.6;
+  /* faint stars field, top-right */
+  header.masthead::before{
+    content:"";position:absolute;top:0;right:0;width:340px;height:200px;pointer-events:none;
+    opacity:.5;
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,.35), transparent),
+      radial-gradient(2px 2px at 70px 60px, rgba(255,255,255,.28), transparent),
+      radial-gradient(2px 2px at 120px 20px, rgba(255,255,255,.3), transparent),
+      radial-gradient(2px 2px at 180px 70px, rgba(255,255,255,.22), transparent),
+      radial-gradient(2px 2px at 240px 40px, rgba(255,255,255,.28), transparent),
+      radial-gradient(2px 2px at 300px 80px, rgba(255,255,255,.2), transparent),
+      radial-gradient(2px 2px at 50px 100px, rgba(255,255,255,.22), transparent),
+      radial-gradient(2px 2px at 150px 120px, rgba(255,255,255,.18), transparent);
+    -webkit-mask-image:linear-gradient(225deg, #000, transparent 70%);
+    mask-image:linear-gradient(225deg, #000, transparent 70%);
   }
-  .masthead-inner{max-width:1080px;margin:0 auto}
+  /* stars-and-stripes bottom rule */
+  header.masthead::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+    background:linear-gradient(90deg, var(--usa-red), var(--usa-red) 33%, #fff 33%, #fff 66%, var(--usa-blue-bright) 66%);
+    opacity:.85;
+  }
+  .masthead-inner{max-width:1080px;margin:0 auto;position:relative;z-index:1}
   .eyebrow{
     font-size:11px;letter-spacing:.32em;text-transform:uppercase;
     color:var(--chalk-faint);font-weight:600;margin-bottom:8px;
@@ -76,8 +101,19 @@
     font-size:clamp(34px,7vw,58px);
     font-weight:800;letter-spacing:-.02em;line-height:.94;
     text-transform:uppercase;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   }
-  h1.wordmark .tank{color:var(--signal)}
+  h1.wordmark .tank{
+    background:linear-gradient(120deg, var(--usa-blue-bright), #fff 50%, var(--stars));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .crest-row{display:flex;align-items:center;gap:9px;margin-left:auto}
+  .crest-row img{height:34px;width:34px;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+  .crest-row .usa-badge{
+    height:38px;width:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--usa-blue),var(--usa-red));font-size:16px;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.25);
+  }
   .subtitle{color:var(--chalk-dim);font-size:14px;margin-top:10px;max-width:620px}
   .updated{font-size:11px;color:var(--chalk-faint);margin-top:12px}
 
@@ -119,6 +155,10 @@
     display:flex;align-items:center;gap:10px;
   }
   .section-head h2::before{content:"";width:18px;height:2px;background:var(--signal)}
+  /* inside the clubs panel, section markers + links adopt the active club color */
+  #panel-clubs .section-head h2::before{background:var(--club)}
+  #panel-clubs a{color:var(--club)}
+  #panel-clubs .pcard{border-left-color:var(--club)}
   .section-head .note{font-size:12px;color:var(--chalk-faint)}
 
   /* ---------- Fixture cards ---------- */
@@ -166,9 +206,14 @@
     padding:9px 15px;border-radius:30px;cursor:pointer;transition:.15s;
     display:flex;align-items:center;gap:8px;
   }
-  .club-chip:hover{border-color:var(--signal);color:var(--chalk)}
-  .club-chip.active{background:var(--signal-soft);border-color:var(--signal);color:var(--chalk)}
+  .club-chip:hover{border-color:var(--club);color:var(--chalk)}
+  .club-chip.active{background:var(--club-soft);border-color:var(--club);color:var(--chalk)}
+  .club-chip.active .dot{box-shadow:0 0 8px var(--club)}
   .club-chip .dot{width:8px;height:8px;border-radius:50%}
+  .chip-crest{width:18px;height:18px;object-fit:contain}
+  /* fixture / card crests */
+  .fx-crest{width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:7px}
+  .pcard-crest{width:22px;height:22px;object-fit:contain}
 
   /* ---------- Transfer feed ---------- */
   .feed{display:grid;gap:0}
@@ -232,18 +277,33 @@
 
   /* ---------- USMNT next match hero ---------- */
   .next-hero{
-    background:linear-gradient(135deg,var(--field-2),var(--field-3));
+    background:
+      radial-gradient(120% 130% at 100% 0%, rgba(47,111,237,.20), transparent 55%),
+      radial-gradient(100% 120% at 0% 100%, rgba(179,25,66,.18), transparent 55%),
+      linear-gradient(135deg,var(--field-2),var(--field-3));
     border:1px solid var(--line);border-radius:var(--radius);
     padding:22px;margin-bottom:18px;position:relative;overflow:hidden;
   }
   .next-hero::before{
-    content:"";position:absolute;top:-40px;right:-40px;width:160px;height:160px;
-    background:radial-gradient(circle,var(--signal-soft),transparent 70%);
+    content:"";position:absolute;top:0;right:0;width:200px;height:120px;pointer-events:none;opacity:.5;
+    background-image:
+      radial-gradient(1.6px 1.6px at 30px 24px,rgba(255,255,255,.4),transparent),
+      radial-gradient(1.6px 1.6px at 80px 50px,rgba(255,255,255,.3),transparent),
+      radial-gradient(1.6px 1.6px at 130px 28px,rgba(255,255,255,.34),transparent),
+      radial-gradient(1.6px 1.6px at 170px 62px,rgba(255,255,255,.26),transparent),
+      radial-gradient(1.6px 1.6px at 50px 80px,rgba(255,255,255,.24),transparent);
+    -webkit-mask-image:linear-gradient(225deg,#000,transparent 75%);
+    mask-image:linear-gradient(225deg,#000,transparent 75%);
   }
-  .next-hero .lbl{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--stars);font-weight:700}
-  .next-hero .match{font-family:'Archivo',sans-serif;font-size:clamp(22px,5vw,34px);font-weight:800;margin-top:8px;letter-spacing:-.01em}
-  .next-hero .when{font-size:13px;color:var(--chalk-dim);margin-top:8px;font-family:'SF Mono',monospace}
-  .next-hero .ctx{font-size:13px;color:var(--chalk-dim);margin-top:10px;max-width:560px}
+  .next-hero::after{
+    content:"";position:absolute;left:0;bottom:0;width:100%;height:3px;
+    background:linear-gradient(90deg,var(--usa-red),var(--usa-red) 33%,#fff 33%,#fff 66%,var(--usa-blue-bright) 66%);opacity:.8;
+  }
+  .next-hero .lbl{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--stars);font-weight:700;position:relative;z-index:1}
+  .next-hero .match{font-family:'Archivo',sans-serif;font-size:clamp(22px,5vw,34px);font-weight:800;margin-top:8px;letter-spacing:-.01em;position:relative;z-index:1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .next-hero .match img{height:40px;width:40px;object-fit:contain}
+  .next-hero .when{font-size:13px;color:var(--chalk-dim);margin-top:8px;font-family:'SF Mono',monospace;position:relative;z-index:1}
+  .next-hero .ctx{font-size:13px;color:var(--chalk-dim);margin-top:10px;max-width:560px;position:relative;z-index:1}
 
   /* ---------- Editorial / where-headed ---------- */
   .take{
@@ -422,7 +482,9 @@
 <header class="masthead">
   <div class="masthead-inner">
     <div class="eyebrow"><span class="pulse"></span> Personal Soccer Desk · Updated live from ESPN</div>
-    <h1 class="wordmark">The Yank <span class="tank">Tank</span></h1>
+    <h1 class="wordmark">The Yank <span class="tank">Tank</span>
+      <span class="crest-row" id="crestRow"><span class="usa-badge" title="USMNT">★</span></span>
+    </h1>
     <p class="subtitle">Man City &amp; the adopted clubs, the full USMNT pool by club form, and the prospects shaping where the program is headed — one screen, every matchday.</p>
     <div class="updated mono" id="globalUpdated">Loading live data…</div>
   </div>
@@ -531,9 +593,9 @@
    league = ESPN soccer league slug; id = ESPN team id.
    ================================================================ */
 const CLUBS = [
-  { key:'mancity', name:'Manchester City', short:'Man City', league:'eng.1', id:'382', color:'#6CABDD' },
-  { key:'milan',   name:'AC Milan',        short:'Milan',    league:'ita.1', id:'103', color:'#FB090B' },
-  { key:'psv',     name:'PSV Eindhoven',   short:'PSV',      league:'ned.1', id:'148', color:'#ED1C24' }
+  { key:'mancity', name:'Manchester City', short:'Man City', league:'eng.1', id:'382', color:'#6CABDD', color2:'#1C2C5B', logo:'https://a.espncdn.com/i/teamlogos/soccer/500/382.png' },
+  { key:'milan',   name:'AC Milan',        short:'Milan',    league:'ita.1', id:'103', color:'#FB090B', color2:'#0a0a0a', logo:'https://a.espncdn.com/i/teamlogos/soccer/500/103.png' },
+  { key:'psv',     name:'PSV Eindhoven',   short:'PSV',      league:'ned.1', id:'148', color:'#ED1C24', color2:'#1a1a1a', logo:'https://a.espncdn.com/i/teamlogos/soccer/500/148.png' }
 ];
 const LEAGUE_LABEL = { 'eng.1':'Premier League', 'ita.1':'Serie A', 'ned.1':'Eredivisie' };
 const USMNT = { league:'usa.1', id:'660' }; // ESPN USMNT team id under fifa national-teams handled via dedicated endpoint below
@@ -811,11 +873,13 @@ function fixtureCard(ev, focusTeam){
     right = `<div class="fx-time">${d.time}</div>`;
   }
   const comp = (ev.compName||ev.comp||'').toString().toUpperCase();
+  const hc = ev.home.logo?`<img class="fx-crest" src="${ev.home.logo}" alt="" onerror="this.style.display='none'">`:'';
+  const ac = ev.away.logo?`<img class="fx-crest" src="${ev.away.logo}" alt="" onerror="this.style.display='none'">`:'';
   return `<div class="fx">
     <div class="fx-date"><div class="d">${d.day}</div><div class="m">${d.mon}</div></div>
     <div class="fx-main">
       <div class="comp">${comp}</div>
-      <div class="teams">${ev.home.name}<span class="vs">v</span>${ev.away.name}</div>
+      <div class="teams">${hc}${ev.home.name}<span class="vs">v</span>${ac}${ev.away.name}</div>
       <div class="meta">${ev.state==='pre'?d.full:ev.detail||''}</div>
     </div>
     <div class="fx-right">${right}</div>
@@ -826,19 +890,32 @@ function fixtureCard(ev, focusTeam){
 let activeClub = CLUBS[0];
 const clubCache = {};
 
+function applyClubTheme(c){
+  const root = document.documentElement.style;
+  root.setProperty('--club', c.color);
+  // soft tint version of the club color
+  const hex = c.color.replace('#','');
+  const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+  root.setProperty('--club-soft', `rgba(${r},${g},${b},.14)`);
+  root.setProperty('--club-2', c.color2||'#111');
+}
+
 function renderClubSwitch(){
   document.getElementById('clubSwitch').innerHTML = CLUBS.map(c=>
     `<button class="club-chip ${c.key===activeClub.key?'active':''}" data-club="${c.key}">
+      <img class="chip-crest" src="${c.logo}" alt="" onerror="this.style.display='none'">
       <span class="dot" style="background:${c.color}"></span>${c.short}</button>`
   ).join('');
   document.querySelectorAll('[data-club]').forEach(b=>b.onclick=()=>{
     activeClub = CLUBS.find(c=>c.key===b.dataset.club);
+    applyClubTheme(activeClub);
     renderClubSwitch(); loadClub();
   });
 }
 
 async function loadClub(){
   const c = activeClub;
+  applyClubTheme(c);
   document.getElementById('clubLeagueNote').textContent = LEAGUE_LABEL[c.league]||'';
   // transfer feed (instant, curated)
   renderFeed(c.key);
@@ -1267,8 +1344,10 @@ async function loadUSMNT(){
     if(nextEv){
       const d = fmtDate(nextEv.date);
       const comp = nextEv.compName || detectComp(nextEv) || 'International fixture';
+      const hc = nextEv.home.logo?`<img src="${nextEv.home.logo}" alt="" onerror="this.style.display='none'">`:'';
+      const ac = nextEv.away.logo?`<img src="${nextEv.away.logo}" alt="" onerror="this.style.display='none'">`:'';
       hero.innerHTML = `<div class="lbl">Next up for the USA</div>
-        <div class="match">${nextEv.home.name} <span style="color:var(--chalk-faint)">vs</span> ${nextEv.away.name}</div>
+        <div class="match">${hc}${nextEv.home.name} <span style="color:var(--chalk-faint)">vs</span> ${ac}${nextEv.away.name}</div>
         <div class="when">${d.full} · ${d.time}${comp?' · '+comp:''}</div>
         <div class="ctx">Every club performance in the tabs above feeds straight into this — the pool\u2019s form is the story heading into kickoff.</div>`;
     }else{
@@ -1737,6 +1816,16 @@ function activateTab(name){
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>activateTab(t.dataset.tab));
 
 /* ---- boot ---- */
+// fill the masthead crest row with all club crests (after the USA badge)
+(function fillCrests(){
+  const row = document.getElementById('crestRow');
+  if(row){
+    row.insertAdjacentHTML('beforeend', CLUBS.map(c=>
+      `<img src="${c.logo}" alt="${c.short}" title="${c.short}" onerror="this.style.display='none'">`
+    ).join(''));
+  }
+})();
+applyClubTheme(activeClub);
 activateTab('week');
 </script>
 </body>
