@@ -475,6 +475,9 @@
     <div class="pool-grid" id="clubAcademy"></div>
     <div id="clubAcademyNews" style="margin-top:14px"></div>
 
+    <div class="section-head"><h2>Squad</h2><span class="note">Live · current first team</span></div>
+    <div class="pool-grid" id="clubRoster"><div class="loading"><div class="spinner"></div>Pulling squad…</div></div>
+
     <div class="section-head"><h2>Injury &amp; Fitness Watch</h2><span class="note">Live · from headlines</span></div>
     <div class="feed" id="clubInjuries"></div>
   </section>
@@ -661,6 +664,18 @@ const HEADED = [
    ================================================================ */
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 
+/* Known USMNT World Cup 2026 path — a safety net so confirmed knockout games
+   always show even if ESPN's live feed lags in attaching them to the schedule.
+   These are merged with live ESPN data (live data wins once it has the game).
+   Update or remove as the run progresses. Times are ISO (ET = UTC-4 in summer). */
+const USMNT_KNOWN = [
+  { id:'wc-r32', date:'2026-07-02T00:00:00Z', compName:'World Cup · Round of 32',
+    home:{name:'USA',score:''}, away:{name:'Bosnia & Herzegovina',score:''}, state:'pre',
+    detail:'Wed Jul 1, 8:00 PM ET · Levi\u2019s Stadium, Santa Clara' }
+  // Round of 16 (Jul 6, Seattle), QF (Jul 10), SF (Jul 14), Final (Jul 19) get added here
+  // automatically by ESPN once the USA advances and opponents are set.
+];
+
 function fmtDate(iso){
   const d = new Date(iso);
   return { day:d.getDate(), mon:d.toLocaleDateString('en-US',{month:'short'}),
@@ -669,11 +684,52 @@ function fmtDate(iso){
 }
 
 async function fetchSchedule(league, teamId){
-  const url = `${ESPN}/${league}/teams/${teamId}/schedule`;
-  const r = await fetch(url);
-  if(!r.ok) throw new Error('schedule '+r.status);
-  const j = await r.json();
-  return (j.events||[]).map(parseEvent).filter(Boolean);
+  // ESPN's /schedule defaults to the team's "active season" which, between seasons,
+  // can come back empty even though fixtures exist. Pull the default plus explicit
+  // current and next season years, then merge + dedupe so upcoming games show up.
+  const now = new Date();
+  const yr = now.getFullYear();
+  // European seasons are labelled by their starting year; in H2 the live season is this year, in H1 it's last year.
+  const seasons = [...new Set([null, yr, yr-1, yr+1])];
+  const base = `${ESPN}/${league}/teams/${teamId}/schedule`;
+  const all = {};
+  await Promise.all(seasons.map(async s=>{
+    const url = s==null ? base : `${base}?season=${s}`;
+    try{
+      const r = await fetch(url);
+      if(!r.ok) return;
+      const j = await r.json();
+      (j.events||[]).forEach(ev=>{ const p=parseEvent(ev); if(p && p.id) all[p.id]=p; });
+    }catch(e){ /* skip this season */ }
+  }));
+  const merged = Object.values(all);
+  merged.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  return merged;
+}
+
+/* Pull events for a team name from a league's scoreboard across a date window.
+   Knockout WC games sometimes appear here before the team-schedule feed. */
+async function fetchScoreboardTeam(league, teamName){
+  const out = {};
+  const today = new Date();
+  // scan a window: 10 days back through 30 days forward, in ~weekly chunks
+  const days = [-7, 0, 7, 14, 21, 28];
+  await Promise.all(days.map(async off=>{
+    const d = new Date(today.getTime() + off*864e5);
+    const ymd = d.toISOString().slice(0,10).replace(/-/g,'');
+    try{
+      const r = await fetch(`${ESPN}/${league}/scoreboard?dates=${ymd}`);
+      if(!r.ok) return;
+      const j = await r.json();
+      (j.events||[]).forEach(ev=>{
+        const p = parseEvent(ev);
+        if(!p) return;
+        const names = (p.home.name+' '+p.away.name).toLowerCase();
+        if(names.includes(teamName.toLowerCase())) out[p.id]=p;
+      });
+    }catch(e){ /* skip */ }
+  }));
+  return Object.values(out);
 }
 
 /* Standings for a league. Returns array of {rank,name,gp,w,d,l,pts,teamId}. */
@@ -792,6 +848,7 @@ async function loadClub(){
   loadLoans(c.key);
   loadAcademy(c.key);
   loadInjuries(c.key);
+  loadRoster(c);
   // fixtures (live)
   const box = document.getElementById('clubFixtures');
   box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling ${c.short} fixtures…</div>`;
@@ -1098,17 +1155,84 @@ async function loadInjuries(key){
   }
 }
 
+/* Live club squad from ESPN roster endpoint. */
+const rosterCache = {};
+async function loadRoster(c){
+  const box = document.getElementById('clubRoster');
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling ${c.short} squad…</div>`;
+  try{
+    if(!rosterCache[c.key]){
+      const r = await fetch(`${ESPN}/${c.league}/teams/${c.id}/roster`);
+      if(!r.ok) throw new Error('roster '+r.status);
+      rosterCache[c.key] = await r.json();
+    }
+    const j = rosterCache[c.key];
+    // ESPN nests athletes either flat or grouped by position
+    let players = [];
+    if(Array.isArray(j.athletes)){
+      j.athletes.forEach(grp=>{
+        if(grp.items) players = players.concat(grp.items);
+        else if(grp.displayName || grp.fullName) players.push(grp);
+      });
+    }
+    if(!players.length){ box.innerHTML = `<div class="empty">No squad returned for ${c.short} right now. ESPN updates rosters around season start.</div>`; return; }
+    // sort by position group then jersey number
+    const posRank = { G:0, D:1, M:2, F:3 };
+    players.sort((a,b)=>{
+      const pa=posRank[(a.position?.abbreviation||'')[0]]??9, pb=posRank[(b.position?.abbreviation||'')[0]]??9;
+      if(pa!==pb) return pa-pb;
+      return (+a.jersey||99)-(+b.jersey||99);
+    });
+    box.innerHTML = players.map(p=>{
+      const name = p.displayName || p.fullName || 'Unknown';
+      const pos = p.position?.abbreviation || '';
+      const num = p.jersey ? '#'+p.jersey : '';
+      const age = p.age || '';
+      const nat = p.citizenship || p.birthPlace?.country || '';
+      return `<div class="pcard">
+        ${pos?`<span class="pos">${pos}</span>`:''}
+        <div class="pname">${name}</div>
+        <div class="pleague">${[num,nat].filter(Boolean).join(' · ')}</div>
+        ${age?`<div class="pstat"><div class="s"><span class="v">${age}</span><span class="k">Age</span></div></div>`:''}
+      </div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = `<div class="empty">Squad loads live on deploy. If you\u2019re seeing this on the live site, ESPN\u2019s roster feed may be refreshing for the new season.</div>`;
+  }
+}
+
 /* ---- USMNT tab ---- */
 async function loadUSMNT(){
   const box = document.getElementById('usmntFixtures');
   const hero = document.getElementById('usmntNext');
   const tbox = document.getElementById('usmntTournament');
   try{
-    // ESPN national teams live under 'fifa.world' team schedule; USMNT id 660
-    let evs = await fetchSchedule('fifa.world','660').catch(()=>null);
-    if(!evs || !evs.length){ evs = await fetchSchedule('usa.1','660').catch(()=>[]); }
+    // Pull the USMNT schedule from every ESPN surface that might carry it:
+    // the national-team schedule, plus the World Cup scoreboard (knockout games
+    // sometimes attach there first). Merge, then layer in known fixtures as a net.
+    const sources = await Promise.all([
+      fetchSchedule('fifa.world','660').catch(()=>[]),
+      fetchSchedule('fifa.wwc','660').catch(()=>[]),       // alt WC slug, harmless if empty
+      fetchScoreboardTeam('fifa.world','United States').catch(()=>[]),
+      fetchScoreboardTeam('fifa.world','USA').catch(()=>[])
+    ]);
+    const merged = {};
+    sources.flat().forEach(e=>{ if(e && e.id) merged[e.id]=e; });
+    // layer in known fixtures only if ESPN doesn't already have that game (by USA + opponent + day)
+    USMNT_KNOWN.forEach(k=>{
+      const kd = new Date(k.date).toDateString();
+      const exists = Object.values(merged).some(e=>{
+        const ed = new Date(e.date).toDateString();
+        const names = (e.home.name+e.away.name).toLowerCase();
+        return ed===kd && (names.includes('united states')||names.includes('usa'));
+      });
+      if(!exists) merged[k.id]=k;
+    });
+    let evs = Object.values(merged).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    if(!evs.length){ evs = await fetchSchedule('usa.1','660').catch(()=>[]); }
+    const now = Date.now();
     const live = evs.filter(e=>e.state==='in');
-    const upcoming = evs.filter(e=>e.state==='pre');
+    const upcoming = evs.filter(e=>e.state==='pre' && new Date(e.date).getTime() >= now-6*3600*1000);
     const past = evs.filter(e=>e.state==='post').slice(-5).reverse();
     const nextEv = live[0]||upcoming[0];
 
@@ -1509,8 +1633,8 @@ async function loadWeek(){
   const missed = document.getElementById('weekMissed');
   const digestBox = document.getElementById('weekDigest');
   const now = Date.now();
-  const weekFromNow = now + 7*24*60*60*1000;
-  const weekAgo = now - 7*24*60*60*1000;
+  const weekFromNow = now + 10*24*60*60*1000;
+  const weekAgo = now - 10*24*60*60*1000;
 
   const sources = [
     ...CLUBS.map(c=>({ label:c.short, kind:'club', league:c.league, id:c.id, focus:c.name })),
@@ -1524,6 +1648,18 @@ async function loadWeek(){
       (evs||[]).forEach(e=>{ e._tag=s.label; e._kind=s.kind; e._focus=s.focus; all.push(e); });
     }catch(e){}
   }));
+  // also pull USMNT games off the WC scoreboard (catches knockout fixtures)
+  try{
+    const sb = await fetchScoreboardTeam('fifa.world','United States').catch(()=>[]);
+    sb.forEach(e=>{ if(!all.some(x=>x.id===e.id)){ e._tag='USA'; e._kind='usa'; e._focus='USA'; all.push(e); } });
+  }catch(e){}
+  // layer in known USMNT fixtures as a safety net
+  USMNT_KNOWN.forEach(k=>{
+    const kd = new Date(k.date).toDateString();
+    if(!all.some(e=>new Date(e.date).toDateString()===kd && (e.home.name+e.away.name).toLowerCase().match(/usa|united states/))){
+      all.push({ ...k, _tag:'USA', _kind:'usa', _focus:'USA' });
+    }
+  });
 
   const upcoming = all.filter(e=>{ const t=new Date(e.date).getTime(); return (e.state==='pre'||e.state==='in') && t>=now-3*3600*1000 && t<=weekFromNow; })
     .sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -1537,7 +1673,7 @@ async function loadWeek(){
   if(upcoming.length){
     const next = upcoming[0]; const d=fmtDate(next.date);
     line = `Next up: <strong>${next.home.name} v ${next.away.name}</strong> on ${d.full}.`;
-  } else { line = 'No fixtures in the next seven days — a quiet week across your teams.'; }
+  } else { line = 'No fixtures in the next ten days — a quiet stretch across your teams.'; }
   digestBox.innerHTML = `<div class="digest">
     <div class="dlbl">Your week at a glance</div>
     <div class="dhead">${today}</div>
@@ -1557,7 +1693,7 @@ async function loadWeek(){
   };
 
   ahead.innerHTML = upcoming.length ? upcoming.map(tagged).join('')
-    : `<div class="empty">No fixtures scheduled in the next 7 days.</div>`;
+    : `<div class="empty">No fixtures scheduled in the next 10 days.</div>`;
   missed.innerHTML = recent.length ? recent.map(tagged).join('')
     : `<div class="empty">No results in the last 7 days.</div>`;
   stampUpdated();
