@@ -1,0 +1,7 @@
+{
+  "name": "yank-tank",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal live dashboard: Man City, AC Milan, PSV + the USMNT pool, prospects, tournaments and news.",
+  "type": "module"
+}

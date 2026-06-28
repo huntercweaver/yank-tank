@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/news.js": { "maxDuration": 10 },
+    "api/club-data.js": { "maxDuration": 10 },
+    "api/player.js": { "maxDuration": 10 },
+    "api/digest.js": { "maxDuration": 30 }
+  },
+  "crons": [
+    { "path": "/api/digest", "schedule": "0 13 * * 1" }
+  ]
+}

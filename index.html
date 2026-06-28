@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Yank Tank — Clubs &amp; USMNT Tracker</title>
+<style>
+  /* ============================================================
+     THE YANK TANK
+     A personal command center for Man City, the adopted clubs,
+     and the trajectory of the USMNT.
+     Design: "matchday terminal" — ink-dark field, chalk-white type,
+     a single electric-blue signal accent (the rising American line),
+     condensed display type for scoreboards, mono for data.
+     ============================================================ */
+
+  :root{
+    --field:#0d1117;          /* deep ink */
+    --field-2:#121922;        /* raised panel */
+    --field-3:#1a2330;        /* hover / card */
+    --line:#27313f;           /* hairlines */
+    --chalk:#eef2f6;          /* primary text */
+    --chalk-dim:#9aa7b4;      /* secondary text */
+    --chalk-faint:#5d6b7a;    /* tertiary */
+    --signal:#2f81f7;         /* the rising line — electric blue */
+    --signal-soft:rgba(47,129,247,.14);
+    --stars:#e23b4e;          /* stars-and-stripes red, used sparingly */
+    --gold:#e8b53f;           /* prospect / watch accent */
+    --win:#3fb950;
+    --draw:#8b949e;
+    --loss:#e5534b;
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--field);
+    color:var(--chalk);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:64px;
+  }
+  ::selection{background:var(--signal);color:#fff}
+
+  .mono{font-family:'SF Mono',ui-monospace,'Roboto Mono',Menlo,Consolas,monospace}
+
+  /* ---------- Masthead ---------- */
+  header.masthead{
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--field-2),var(--field));
+    padding:26px 20px 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  /* the rising line motif behind the title */
+  header.masthead::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--signal) 70%,var(--stars));
+    opacity:.6;
+  }
+  .masthead-inner{max-width:1080px;margin:0 auto}
+  .eyebrow{
+    font-size:11px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--chalk-faint);font-weight:600;margin-bottom:8px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow .pulse{
+    width:7px;height:7px;border-radius:50%;background:var(--win);
+    box-shadow:0 0 0 0 rgba(63,185,80,.6);animation:pulse 2.4s infinite;
+  }
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)}70%{box-shadow:0 0 0 7px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+  h1.wordmark{
+    font-family:'Archivo','Inter',sans-serif;
+    font-size:clamp(34px,7vw,58px);
+    font-weight:800;letter-spacing:-.02em;line-height:.94;
+    text-transform:uppercase;
+  }
+  h1.wordmark .tank{color:var(--signal)}
+  .subtitle{color:var(--chalk-dim);font-size:14px;margin-top:10px;max-width:620px}
+  .updated{font-size:11px;color:var(--chalk-faint);margin-top:12px}
+
+  /* ---------- Tab nav ---------- */
+  nav.tabs{
+    position:sticky;top:0;z-index:50;
+    background:rgba(13,17,23,.86);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .tabs-inner{max-width:1080px;margin:0 auto;display:flex;gap:2px;padding:0 12px;overflow-x:auto}
+  .tabs-inner::-webkit-scrollbar{display:none}
+  .tab{
+    appearance:none;background:none;border:none;cursor:pointer;
+    color:var(--chalk-dim);font-family:inherit;font-size:13.5px;font-weight:600;
+    letter-spacing:.02em;padding:16px 16px 14px;white-space:nowrap;
+    border-bottom:2px solid transparent;transition:color .15s,border-color .15s;
+  }
+  .tab:hover{color:var(--chalk)}
+  .tab.active{color:var(--chalk);border-bottom-color:var(--signal)}
+  .tab .count{
+    font-family:'SF Mono',monospace;font-size:10px;color:var(--chalk-faint);
+    background:var(--field-3);padding:1px 6px;border-radius:20px;margin-left:6px;
+  }
+
+  /* ---------- Layout ---------- */
+  main{max-width:1080px;margin:0 auto;padding:28px 20px}
+  .panel{display:none;animation:fade .35s ease}
+  .panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .section-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:12px;margin:30px 0 14px;flex-wrap:wrap;
+  }
+  .section-head:first-child{margin-top:0}
+  .section-head h2{
+    font-family:'Archivo',sans-serif;font-size:13px;font-weight:700;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--chalk);
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-head h2::before{content:"";width:18px;height:2px;background:var(--signal)}
+  .section-head .note{font-size:12px;color:var(--chalk-faint)}
+
+  /* ---------- Fixture cards ---------- */
+  .fixtures{display:grid;gap:10px}
+  .fx{
+    background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto;
+    gap:14px;align-items:center;transition:border-color .15s,background .15s;
+  }
+  .fx:hover{border-color:var(--signal);background:var(--field-3)}
+  .fx-date{text-align:center;min-width:46px}
+  .fx-date .d{font-family:'Archivo',sans-serif;font-size:20px;font-weight:800;line-height:1}
+  .fx-date .m{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-faint);margin-top:3px}
+  .fx-main .comp{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--signal);font-weight:600;margin-bottom:4px}
+  .fx-main .teams{font-size:15px;font-weight:600}
+  .fx-main .teams .vs{color:var(--chalk-faint);font-weight:400;margin:0 7px;font-size:13px}
+  .fx-main .meta{font-size:11.5px;color:var(--chalk-dim);margin-top:3px}
+  .fx-right{text-align:right;min-width:60px}
+  .fx-score{font-family:'Archivo',sans-serif;font-size:22px;font-weight:800;letter-spacing:.02em}
+  .fx-time{font-family:'SF Mono',monospace;font-size:13px;color:var(--chalk-dim)}
+  .badge{
+    display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;padding:2px 7px;border-radius:5px;
+  }
+  .badge.live{background:var(--stars);color:#fff;animation:blink 1.4s infinite}
+  @keyframes blink{50%{opacity:.55}}
+  .badge.ft{background:var(--field-3);color:var(--chalk-dim);border:1px solid var(--line)}
+  .res-W{color:var(--win)} .res-D{color:var(--draw)} .res-L{color:var(--loss)}
+
+  .loading,.empty{
+    text-align:center;padding:28px;color:var(--chalk-faint);
+    font-size:13px;border:1px dashed var(--line);border-radius:var(--radius);
+  }
+  .spinner{
+    width:22px;height:22px;border:2px solid var(--line);border-top-color:var(--signal);
+    border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- Club selector ---------- */
+  .club-switch{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .club-chip{
+    appearance:none;border:1px solid var(--line);background:var(--field-2);
+    color:var(--chalk-dim);font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 15px;border-radius:30px;cursor:pointer;transition:.15s;
+    display:flex;align-items:center;gap:8px;
+  }
+  .club-chip:hover{border-color:var(--signal);color:var(--chalk)}
+  .club-chip.active{background:var(--signal-soft);border-color:var(--signal);color:var(--chalk)}
+  .club-chip .dot{width:8px;height:8px;border-radius:50%}
+
+  /* ---------- Transfer feed ---------- */
+  .feed{display:grid;gap:0}
+  .feed-item{
+    display:grid;grid-template-columns:auto 1fr;gap:14px;
+    padding:15px 4px;border-bottom:1px solid var(--line);
+  }
+  .feed-item:last-child{border-bottom:none}
+  .feed-rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:3px}
+  .feed-tier{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:5px;white-space:nowrap}
+  .tier-done{background:rgba(63,185,80,.16);color:var(--win)}
+  .tier-advanced{background:var(--signal-soft);color:var(--signal)}
+  .tier-rumor{background:rgba(232,181,63,.14);color:var(--gold)}
+  .tier-cold{background:var(--field-3);color:var(--chalk-faint)}
+  .feed-body .headline{font-size:14.5px;font-weight:600;line-height:1.4}
+  .feed-body .headline .name{color:var(--signal)}
+  .feed-body .detail{font-size:12.5px;color:var(--chalk-dim);margin-top:4px}
+  .feed-body .src{font-size:11px;color:var(--chalk-faint);margin-top:6px;font-family:'SF Mono',monospace}
+
+  /* ---------- Player / pool cards ---------- */
+  .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .pcard{
+    background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;transition:.15s;position:relative;overflow:hidden;
+  }
+  .pcard:hover{border-color:var(--signal);transform:translateY(-2px)}
+  .pcard .pos{
+    position:absolute;top:0;right:0;font-size:9.5px;font-weight:800;letter-spacing:.08em;
+    background:var(--field-3);color:var(--chalk-dim);padding:4px 9px;border-bottom-left-radius:9px;
+  }
+  .pcard .pname{font-family:'Archivo',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .pcard .pclub{font-size:12.5px;color:var(--signal);font-weight:600;margin-top:2px}
+  .pcard .pleague{font-size:11px;color:var(--chalk-faint);margin-top:1px}
+  .pcard .pstat{
+    display:flex;gap:16px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
+  }
+  .pcard .pstat .s{display:flex;flex-direction:column}
+  .pcard .pstat .s .v{font-family:'Archivo',sans-serif;font-size:18px;font-weight:800}
+  .pcard .pstat .s .k{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-faint);margin-top:1px}
+  .form-row{display:flex;gap:4px;margin-top:12px}
+  .form-pip{
+    width:20px;height:20px;border-radius:5px;font-size:10px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-family:'SF Mono',monospace;
+  }
+  .pip-W{background:rgba(63,185,80,.18);color:var(--win)}
+  .pip-D{background:var(--field-3);color:var(--draw)}
+  .pip-L{background:rgba(229,83,75,.16);color:var(--loss)}
+
+  /* prospect card flair */
+  .pcard.prospect{border-left:2px solid var(--gold)}
+  .pcard.prospect .pname::after{content:"";display:inline-block;width:6px;height:6px;background:var(--gold);border-radius:50%;margin-left:7px;vertical-align:middle}
+  .pcard .ptag{
+    display:inline-block;font-size:10px;color:var(--gold);font-weight:600;
+    margin-top:10px;letter-spacing:.02em;
+  }
+  .pcard .pwhy{font-size:12px;color:var(--chalk-dim);margin-top:8px;line-height:1.45}
+  .pcard .page{
+    position:absolute;bottom:14px;right:14px;font-family:'Archivo',sans-serif;
+    font-size:11px;color:var(--chalk-faint);font-weight:700;
+  }
+
+  /* ---------- USMNT next match hero ---------- */
+  .next-hero{
+    background:linear-gradient(135deg,var(--field-2),var(--field-3));
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;margin-bottom:18px;position:relative;overflow:hidden;
+  }
+  .next-hero::before{
+    content:"";position:absolute;top:-40px;right:-40px;width:160px;height:160px;
+    background:radial-gradient(circle,var(--signal-soft),transparent 70%);
+  }
+  .next-hero .lbl{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--stars);font-weight:700}
+  .next-hero .match{font-family:'Archivo',sans-serif;font-size:clamp(22px,5vw,34px);font-weight:800;margin-top:8px;letter-spacing:-.01em}
+  .next-hero .when{font-size:13px;color:var(--chalk-dim);margin-top:8px;font-family:'SF Mono',monospace}
+  .next-hero .ctx{font-size:13px;color:var(--chalk-dim);margin-top:10px;max-width:560px}
+
+  /* ---------- Editorial / where-headed ---------- */
+  .take{
+    background:var(--field-2);border:1px solid var(--line);border-left:2px solid var(--signal);
+    border-radius:var(--radius);padding:18px 20px;margin-top:12px;
+  }
+  .take h3{font-family:'Archivo',sans-serif;font-size:14px;font-weight:700;letter-spacing:.02em;margin-bottom:8px}
+  .take p{font-size:13.5px;color:var(--chalk-dim);line-height:1.6;margin-bottom:9px}
+  .take p:last-child{margin-bottom:0}
+  .take strong{color:var(--chalk)}
+
+  /* ---------- Edit hint ---------- */
+  .edit-hint{
+    margin-top:36px;padding:16px 18px;border:1px dashed var(--line);border-radius:var(--radius);
+    font-size:12.5px;color:var(--chalk-faint);line-height:1.6;
+  }
+  .edit-hint code{background:var(--field-3);color:var(--gold);padding:1px 6px;border-radius:4px;font-family:'SF Mono',monospace;font-size:11.5px}
+  .edit-hint b{color:var(--chalk-dim)}
+
+  footer{max-width:1080px;margin:30px auto 0;padding:20px;border-top:1px solid var(--line);font-size:11px;color:var(--chalk-faint);text-align:center}
+
+  /* ---------- Standings strip ---------- */
+  .standing{
+    background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:4px;margin-bottom:6px;overflow-x:auto;
+  }
+  .standing table{width:100%;border-collapse:collapse;min-width:440px}
+  .standing th{
+    font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-faint);
+    font-weight:600;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  .standing th.l{text-align:left}
+  .standing td{font-size:13px;padding:9px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  .standing tr:last-child td{border-bottom:none}
+  .standing td.l{text-align:left;font-weight:600}
+  .standing td.rank{font-family:'Archivo',sans-serif;font-weight:800;color:var(--chalk-faint);width:30px;text-align:center}
+  .standing tr.me{background:var(--signal-soft)}
+  .standing tr.me td.l,.standing tr.me td.rank{color:var(--signal)}
+  .standing td.pts{font-family:'Archivo',sans-serif;font-weight:800}
+  .standing .formcell{display:flex;gap:3px;justify-content:flex-end}
+  .standing .fp{width:15px;height:15px;border-radius:3px;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:'SF Mono',monospace}
+  .standing-cap{font-size:11px;color:var(--chalk-faint);padding:8px 10px 4px}
+
+  /* ---------- Tournament banner ---------- */
+  .tourn{
+    background:linear-gradient(135deg,rgba(226,59,78,.16),var(--field-2));
+    border:1px solid var(--line);border-left:3px solid var(--stars);
+    border-radius:var(--radius);padding:18px 20px;margin-bottom:18px;
+  }
+  .tourn .tlbl{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--stars);font-weight:700}
+  .tourn .tname{font-family:'Archivo',sans-serif;font-size:22px;font-weight:800;margin-top:6px;letter-spacing:-.01em}
+  .tourn .tmeta{font-size:13px;color:var(--chalk-dim);margin-top:7px;font-family:'SF Mono',monospace}
+  .tourn .tstage{display:inline-block;margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--stars);color:#fff;padding:4px 10px;border-radius:6px}
+
+  /* ---------- In action this week ---------- */
+  .action-list{display:grid;gap:9px}
+  .action-item{
+    background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:13px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    transition:border-color .15s;
+  }
+  .action-item:hover{border-color:var(--signal)}
+  .action-item .who{min-width:0}
+  .action-item .who .pn{font-size:14.5px;font-weight:700}
+  .action-item .who .pc{font-size:12px;color:var(--chalk-dim);margin-top:1px}
+  .action-item .fixture{font-size:12.5px;color:var(--chalk-dim);text-align:right}
+  .action-item .fixture .opp{color:var(--chalk);font-weight:600}
+  .action-item .day{text-align:center;min-width:44px;font-family:'Archivo',sans-serif}
+  .action-item .day .dn{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--signal)}
+  .action-item .day .dt{font-family:'SF Mono',monospace;font-size:11px;color:var(--chalk-faint);margin-top:2px}
+
+  /* ---------- Club health panel ---------- */
+  .health{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;margin-bottom:8px;
+  }
+  .health .cell{background:var(--field-2);padding:14px}
+  .health .cell .hv{font-family:'Archivo',sans-serif;font-size:24px;font-weight:800;line-height:1}
+  .health .cell .hk{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-faint);margin-top:5px}
+  .health .cell .hsub{font-size:11px;color:var(--chalk-dim);margin-top:3px}
+  .health .cell.trend-hot .hv{color:var(--win)}
+  .health .cell.trend-cold .hv{color:var(--loss)}
+  .health-form{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap}
+  .health-form .fp{width:18px;height:18px;border-radius:4px;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:'SF Mono',monospace}
+
+  /* ---------- Deep player stats ---------- */
+  .pstats{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:8px;
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
+  }
+  .pstats .ps{display:flex;flex-direction:column;align-items:flex-start}
+  .pstats .ps .pv{font-family:'Archivo',sans-serif;font-size:16px;font-weight:800;line-height:1}
+  .pstats .ps .pk{font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--chalk-faint);margin-top:3px}
+  .pstats-loading{font-size:11px;color:var(--chalk-faint);margin-top:10px;display:flex;align-items:center;gap:7px}
+  .dot3{display:inline-flex;gap:3px}
+  .dot3 i{width:4px;height:4px;border-radius:50%;background:var(--chalk-faint);animation:b3 1.2s infinite}
+  .dot3 i:nth-child(2){animation-delay:.2s}
+  .dot3 i:nth-child(3){animation-delay:.4s}
+  @keyframes b3{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+  /* ---------- This Week digest ---------- */
+  .digest{
+    background:linear-gradient(135deg,var(--field-2),var(--field-3));
+    border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-bottom:20px;
+    position:relative;overflow:hidden;
+  }
+  .digest::before{content:"";position:absolute;top:-50px;right:-50px;width:180px;height:180px;background:radial-gradient(circle,var(--signal-soft),transparent 70%)}
+  .digest .dlbl{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--signal);font-weight:700}
+  .digest .dhead{font-family:'Archivo',sans-serif;font-size:clamp(20px,4vw,26px);font-weight:800;margin-top:8px;letter-spacing:-.01em}
+  .digest .dstats{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap}
+  .digest .dstat .dv{font-family:'Archivo',sans-serif;font-size:26px;font-weight:800;line-height:1}
+  .digest .dstat .dk{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--chalk-faint);margin-top:3px}
+  .digest .dline{font-size:13px;color:var(--chalk-dim);margin-top:14px;line-height:1.55}
+  .fx .fx-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;margin-left:8px;vertical-align:middle}
+  .fx-tag.usa{background:var(--stars);color:#fff}
+  .fx-tag.club{background:var(--signal-soft);color:var(--signal)}
+
+  /* ---------- USMNT group / qualification ---------- */
+  .group-box{background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);padding:4px;margin-bottom:8px;overflow-x:auto}
+  .group-box .gcap{font-size:11px;color:var(--chalk-faint);padding:9px 12px 5px;display:flex;justify-content:space-between;align-items:center}
+  .group-box table{width:100%;border-collapse:collapse;min-width:360px}
+  .group-box th{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--chalk-faint);font-weight:600;text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
+  .group-box th.l{text-align:left}
+  .group-box td{font-size:13px;padding:9px;text-align:right;border-bottom:1px solid var(--line)}
+  .group-box tr:last-child td{border-bottom:none}
+  .group-box td.l{text-align:left;font-weight:600}
+  .group-box td.rank{font-family:'Archivo',sans-serif;font-weight:800;color:var(--chalk-faint);width:26px;text-align:center}
+  .group-box tr.usa{background:var(--signal-soft)}
+  .group-box tr.usa td.l,.group-box tr.usa td.rank{color:var(--signal)}
+  .group-box tr.qual td.rank::after{content:"▴";color:var(--win);font-size:9px;margin-left:2px}
+  .group-box td.pts{font-family:'Archivo',sans-serif;font-weight:800}
+  .scenario{background:var(--field-2);border:1px solid var(--line);border-left:3px solid var(--stars);border-radius:var(--radius);padding:15px 18px;margin-bottom:8px}
+  .scenario h4{font-family:'Archivo',sans-serif;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--stars);margin-bottom:7px}
+  .scenario p{font-size:13px;color:var(--chalk-dim);line-height:1.55;margin:0}
+
+  /* ---------- Injury / fitness strip ---------- */
+  .injury-item .feed-tier{background:rgba(229,83,75,.16);color:var(--loss)}
+
+  /* ---------- Club competitions ---------- */
+  .comps{display:grid;gap:9px;margin-bottom:8px}
+  .comp-row{
+    background:var(--field-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:13px 16px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+    border-left:3px solid var(--signal);
+  }
+  .comp-row.cont{border-left-color:var(--stars)}
+  .comp-row.cup{border-left-color:var(--gold)}
+  .comp-row .cname{font-family:'Archivo',sans-serif;font-size:15px;font-weight:700}
+  .comp-row .cnext{font-size:12px;color:var(--chalk-dim);margin-top:3px}
+  .comp-row .cmeta{text-align:right;font-size:11px;color:var(--chalk-faint);font-family:'SF Mono',monospace}
+  .comp-row .ctag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--chalk-faint)}
+
+  /* ---------- Roster tiers ---------- */
+  .tier-head{display:flex;align-items:center;gap:12px;margin:26px 0 12px}
+  .tier-head:first-child{margin-top:4px}
+  .tier-badge{font-family:'Archivo',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:5px 12px;border-radius:7px}
+  .tier-badge.tier-lock{background:var(--signal);color:#fff}
+  .tier-badge.tier-likely{background:rgba(63,185,80,.18);color:var(--win)}
+  .tier-badge.tier-bubble{background:rgba(232,181,63,.18);color:var(--gold)}
+  .tier-badge.tier-future{background:var(--field-3);color:var(--chalk-dim)}
+  .tier-count{font-family:'SF Mono',monospace;font-size:12px;color:var(--chalk-faint);background:var(--field-3);padding:2px 9px;border-radius:20px}
+  .tier-note{font-size:12px;color:var(--chalk-faint)}
+  .pool-grid + .tier-head{margin-top:30px}
+
+  @media(max-width:560px){
+    .fx{grid-template-columns:auto 1fr;gap:10px}
+    .fx-right{grid-column:2;text-align:left;margin-top:2px}
+    main{padding:22px 14px}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="eyebrow"><span class="pulse"></span> Personal Soccer Desk · Updated live from ESPN</div>
+    <h1 class="wordmark">The Yank <span class="tank">Tank</span></h1>
+    <p class="subtitle">Man City &amp; the adopted clubs, the full USMNT pool by club form, and the prospects shaping where the program is headed — one screen, every matchday.</p>
+    <div class="updated mono" id="globalUpdated">Loading live data…</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-inner" id="tabBar">
+    <button class="tab active" data-tab="week">This Week</button>
+    <button class="tab" data-tab="clubs">My Clubs</button>
+    <button class="tab" data-tab="usmnt">USMNT Central</button>
+    <button class="tab" data-tab="pool">The Pool</button>
+    <button class="tab" data-tab="pipeline">The Pipeline</button>
+    <button class="tab" data-tab="headed">Where It's Headed</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ============ THIS WEEK ============ -->
+  <section class="panel active" id="panel-week">
+    <div id="weekDigest"></div>
+    <div class="section-head"><h2>What I Missed</h2><span class="note">Recent results across your teams</span></div>
+    <div class="fixtures" id="weekMissed"><div class="loading"><div class="spinner"></div>Gathering recent results…</div></div>
+    <div class="section-head"><h2>The Week Ahead</h2><span class="note">Every fixture, in date order</span></div>
+    <div class="fixtures" id="weekAhead"><div class="loading"><div class="spinner"></div>Building your week…</div></div>
+  </section>
+
+  <!-- ============ MY CLUBS ============ -->
+  <section class="panel" id="panel-clubs">
+    <div class="club-switch" id="clubSwitch"></div>
+
+    <div id="clubStanding"></div>
+
+    <div class="section-head"><h2>Club Health</h2><span class="note" id="healthNote">Live · form, goals, trend</span></div>
+    <div id="clubHealth"></div>
+
+    <div class="section-head"><h2>Competitions</h2><span class="note">Live · tournaments &amp; cups</span></div>
+    <div id="clubComps"></div>
+
+    <div class="section-head"><h2>Fixtures &amp; Results</h2><span class="note" id="clubLeagueNote"></span></div>
+    <div class="fixtures" id="clubFixtures"><div class="loading"><div class="spinner"></div>Pulling fixtures…</div></div>
+
+    <div class="section-head"><h2>Transfer &amp; Club News</h2><span class="note">Live · auto-pulled headlines</span></div>
+    <div class="feed" id="clubFeed"></div>
+
+    <div class="section-head"><h2>Out On Loan</h2><span class="note">Live · from season page</span></div>
+    <div class="pool-grid" id="clubLoans"></div>
+
+    <div class="section-head"><h2>Academy Watch</h2><span class="note">Prospects + live youth news</span></div>
+    <div class="pool-grid" id="clubAcademy"></div>
+    <div id="clubAcademyNews" style="margin-top:14px"></div>
+
+    <div class="section-head"><h2>Injury &amp; Fitness Watch</h2><span class="note">Live · from headlines</span></div>
+    <div class="feed" id="clubInjuries"></div>
+  </section>
+
+  <!-- ============ USMNT CENTRAL ============ -->
+  <section class="panel" id="panel-usmnt">
+    <div id="usmntTournament"></div>
+    <div id="usmntGroup"></div>
+    <div class="next-hero" id="usmntNext"></div>
+    <div class="section-head"><h2>USMNT Fixtures &amp; Results</h2><span class="note">Live · USA men's national team</span></div>
+    <div class="fixtures" id="usmntFixtures"><div class="loading"><div class="spinner"></div>Pulling USMNT schedule…</div></div>
+
+    <div class="section-head"><h2>Pool In Action This Week</h2><span class="note" id="actionWindow">Live · next 7 days</span></div>
+    <div class="action-list" id="actionList"><div class="loading"><div class="spinner"></div>Scanning club fixtures…</div></div>
+
+    <div class="section-head"><h2>USMNT Newswire</h2><span class="note">Live · auto-pulled headlines</span></div>
+    <div class="feed" id="usmntFeed"><div class="loading"><div class="spinner"></div>Pulling USMNT news…</div></div>
+  </section>
+
+  <!-- ============ THE POOL ============ -->
+  <section class="panel" id="panel-pool">
+    <div class="section-head"><h2>The Senior Pool</h2><span class="note">Where the 26 + fringe play · sorted by club tier</span></div>
+    <p style="font-size:13px;color:var(--chalk-dim);margin-bottom:16px">Every name mapped to its club so you can follow form week to week. Form pips show each club's last 5 league results.</p>
+    <div id="poolGrid"></div>
+  </section>
+
+  <!-- ============ THE PIPELINE ============ -->
+  <section class="panel" id="panel-pipeline">
+    <div class="section-head"><h2>Next Generation</h2><span class="note">U-23 &amp; dual-nationals to watch</span></div>
+    <p style="font-size:13px;color:var(--chalk-dim);margin-bottom:16px">The names that tell you where the program is going — young talent breaking through, plus dual-national decisions still in play.</p>
+    <div class="pool-grid" id="pipelineGrid"></div>
+    <div id="prospectNews" style="margin-top:30px"></div>
+  </section>
+
+  <!-- ============ WHERE IT'S HEADED ============ -->
+  <section class="panel" id="panel-headed">
+    <div class="section-head"><h2>State of the Program</h2><span class="note">The trajectory read</span></div>
+    <div id="headedContent"></div>
+    <div class="edit-hint">
+      <b>This dashboard runs itself.</b> Fixtures, scores, league tables, last-5 form, "in action this week," the active-tournament banner, transfer &amp; club news, the USMNT newswire, and emerging-player headlines all pull live every load — from ESPN (data) and the <code>/api/news</code> function (headlines). Nothing to update by hand. The only baseline lists in the code are the senior-pool roster and the prospect cards (<code>POOL</code> / <code>PIPELINE</code>), which seed the views; live news layers on top of them. To track another club, add it to <code>CLUBS</code> and <code>CLUB_ESPN</code>. Commit through the GitHub web UI; Vercel redeploys automatically.
+    </div>
+  </section>
+
+</main>
+
+<footer class="mono">The Yank Tank · live fixtures via ESPN public API · curated layers edited by hand · built for matchday</footer>
+
+<script>
+/* ================================================================
+   CONFIG — clubs you track. Edit this list to add/remove clubs.
+   league = ESPN soccer league slug; id = ESPN team id.
+   ================================================================ */
+const CLUBS = [
+  { key:'mancity', name:'Manchester City', short:'Man City', league:'eng.1', id:'382', color:'#6CABDD' },
+  { key:'milan',   name:'AC Milan',        short:'Milan',    league:'ita.1', id:'103', color:'#FB090B' },
+  { key:'psv',     name:'PSV Eindhoven',   short:'PSV',      league:'ned.1', id:'148', color:'#ED1C24' }
+];
+const LEAGUE_LABEL = { 'eng.1':'Premier League', 'ita.1':'Serie A', 'ned.1':'Eredivisie' };
+const USMNT = { league:'usa.1', id:'660' }; // ESPN USMNT team id under fifa national-teams handled via dedicated endpoint below
+
+/* Club -> ESPN league+id, so we can pull live fixtures for pool players' clubs.
+   Add a club here (with its ESPN ids) to make its players show in "In Action This Week".
+   Find an id by loading: site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams */
+const CLUB_ESPN = {
+  'AC Milan':            { league:'ita.1', id:'103' },
+  'AS Monaco':           { league:'fra.1', id:'174' },
+  'PSV Eindhoven':       { league:'ned.1', id:'148' },
+  'Coventry City':       { league:'eng.1', id:'351' },
+  'Juventus':            { league:'ita.1', id:'111' },
+  'Bournemouth':         { league:'eng.1', id:'349' },
+  'Marseille':           { league:'fra.1', id:'176' },
+  'Fulham':              { league:'eng.1', id:'370' },
+  'Crystal Palace':      { league:'eng.1', id:'384' },
+  'Borussia M\u00f6nchengladbach': { league:'ger.1', id:'124' },
+  'Bayer Leverkusen':    { league:'ger.1', id:'131' },
+  'Leeds United':        { league:'eng.1', id:'357' },
+  'Celtic':              { league:'sco.1', id:'256' },
+  'Charlotte FC':        { league:'usa.1', id:'21300' },
+  'Manchester City':     { league:'eng.1', id:'382' },
+  'Villarreal':          { league:'esp.1', id:'102' },
+  'Toulouse':            { league:'fra.1', id:'2638' },
+  'FC Cincinnati':       { league:'usa.1', id:'18267' },
+  'Columbus Crew':       { league:'usa.1', id:'183' },
+  'New England Revolution':{ league:'usa.1', id:'189' },
+  'New York City FC':    { league:'usa.1', id:'17606' },
+  'Chicago Fire':        { league:'usa.1', id:'182' },
+  'Vancouver Whitecaps': { league:'usa.1', id:'9727' },
+  'Seattle Sounders':    { league:'usa.1', id:'9726' },
+  'Real Salt Lake':      { league:'usa.1', id:'4771' },
+  'Atl\u00e9tico Madrid': { league:'esp.1', id:'1068' },
+  'Middlesbrough':       { league:'eng.2', id:'369' },
+  'Norwich City':        { league:'eng.2', id:'381' },
+  'Club Am\u00e9rica':    { league:'mex.1', id:'227' }
+};
+
+/* ================================================================
+   CURATED DATA LAYER — edit by hand, commit, redeploy.
+   ================================================================ */
+
+/* Senior pool — full 26-man World Cup roster + key fringe/depth.
+   tier: 'lock' (in the 26, nailed-on) | 'likely' | 'bubble' (fringe/depth) | 'future'
+   Int'l caps/goals are national-team numbers. Club season stats pull live from /api/player.
+   form = club's last-5 league results (also refreshed live). */
+const POOL = [
+  // ---- GOALKEEPERS ----
+  { name:'Matt Turner', pos:'GK', tier:'lock', club:'New England Revolution', league:'MLS', age:32, caps:0, goals:0, note:'Veteran shot-stopper; FA Cup winner pedigree', form:[] },
+  { name:'Matt Freese', pos:'GK', tier:'lock', club:'New York City FC', league:'MLS', age:27, caps:14, goals:0, note:'Likely WC starter; ball-playing keeper', form:[] },
+  { name:'Chris Brady', pos:'GK', tier:'lock', club:'Chicago Fire', league:'MLS', age:22, caps:0, goals:0, note:'Young third keeper; high ceiling', form:[] },
+  // ---- DEFENDERS ----
+  { name:'Chris Richards', pos:'DEF', tier:'lock', club:'Crystal Palace', league:'Premier League', age:26, caps:36, goals:3, note:'Top USMNT defender; FA Cup winner, 2025 Gold Cup Best XI', form:[] },
+  { name:'Antonee Robinson', pos:'DEF', tier:'lock', club:'Fulham', league:'Premier League', age:28, caps:0, goals:0, note:'Elite attacking left-back', form:[] },
+  { name:'Sergiño Dest', pos:'DEF', tier:'lock', club:'PSV Eindhoven', league:'Eredivisie', age:25, caps:37, goals:2, note:'Attacking right-back; CL qualified', form:[] },
+  { name:'Tim Ream', pos:'DEF', tier:'lock', club:'Charlotte FC', league:'MLS', age:38, caps:80, goals:1, note:'Captain; veteran leader at CB', form:[] },
+  { name:'Auston Trusty', pos:'DEF', tier:'lock', club:'Celtic', league:'Scottish Prem', age:27, caps:6, goals:0, note:'Left-footed CB; CL experience', form:[] },
+  { name:'Miles Robinson', pos:'DEF', tier:'lock', club:'FC Cincinnati', league:'MLS', age:29, caps:38, goals:3, note:'Athletic CB; aerial presence', form:[] },
+  { name:'Joe Scally', pos:'DEF', tier:'lock', club:'Borussia M\u00f6nchengladbach', league:'Bundesliga', age:23, caps:24, goals:0, note:'Versatile FB; youngest non-German to 150 Bundesliga games', form:[] },
+  { name:'Alex Freeman', pos:'DEF', tier:'lock', club:'Villarreal', league:'La Liga', age:21, caps:15, goals:2, note:'Rising RB; moved to LaLiga & CL', form:[] },
+  { name:'Mark McKenzie', pos:'DEF', tier:'lock', club:'Toulouse', league:'Ligue 1', age:27, caps:0, goals:0, note:'Ball-playing CB depth', form:[] },
+  { name:'Max Arfsten', pos:'DEF', tier:'lock', club:'Columbus Crew', league:'MLS', age:25, caps:0, goals:0, note:'Energetic wing-back option', form:[] },
+  // ---- MIDFIELDERS ----
+  { name:'Tyler Adams', pos:'MID', tier:'lock', club:'Bournemouth', league:'Premier League', age:27, caps:0, goals:0, note:'The engine; ball-winning DM, system foundation', form:[] },
+  { name:'Weston McKennie', pos:'MID', tier:'lock', club:'Juventus', league:'Serie A', age:27, caps:64, goals:12, note:'Box-to-box; late runs, goals from deep', form:[] },
+  { name:'Gio Reyna', pos:'MID', tier:'lock', club:'Borussia M\u00f6nchengladbach', league:'Bundesliga', age:23, caps:36, goals:9, note:'Creator; talent vs minutes the big debate', form:[] },
+  { name:'Malik Tillman', pos:'MID', tier:'lock', club:'Bayer Leverkusen', league:'Bundesliga', age:24, caps:28, goals:3, note:'Press-resistant 10; Europa League qualified', form:[] },
+  { name:'Sebastian Berhalter', pos:'MID', tier:'lock', club:'Vancouver Whitecaps', league:'MLS', age:25, caps:11, goals:1, note:'Deep-lying passer; son of Gregg', form:[] },
+  { name:'Cristian Roldan', pos:'MID', tier:'lock', club:'Seattle Sounders', league:'MLS', age:31, caps:45, goals:0, note:'Energy & versatility off the bench', form:[] },
+  // ---- FORWARDS ----
+  { name:'Christian Pulisic', pos:'ATT', tier:'lock', club:'AC Milan', league:'Serie A', age:27, caps:86, goals:33, note:'Captain & talisman; all-time active top scorer', form:[] },
+  { name:'Folarin Balogun', pos:'ST', tier:'lock', club:'AS Monaco', league:'Ligue 1', age:24, caps:25, goals:8, note:'The No.9; 19 club goals, brace in WC opener', form:[] },
+  { name:'Ricardo Pepi', pos:'ST', tier:'lock', club:'PSV Eindhoven', league:'Eredivisie', age:23, caps:35, goals:13, note:'Led PSV scoring; chemistry with Pulisic', form:[] },
+  { name:'Tim Weah', pos:'ATT', tier:'lock', club:'Marseille', league:'Ligue 1', age:26, caps:51, goals:7, note:'Pace & directness; son of George Weah', form:[] },
+  { name:'Haji Wright', pos:'ST', tier:'lock', club:'Coventry City', league:'Premier League', age:28, caps:20, goals:7, note:'17 league G fired Coventry up to the Prem', form:[] },
+  { name:'Brenden Aaronson', pos:'ATT', tier:'lock', club:'Leeds United', league:'Premier League', age:25, caps:57, goals:9, note:'High-energy presser off the wing', form:[] },
+  { name:'Alejandro Zendejas', pos:'ATT', tier:'lock', club:'Club Am\u00e9rica', league:'Liga MX', age:27, caps:13, goals:2, note:'Dual-national winger; dangerous off either foot', form:[] },
+
+  // ---- FRINGE / DEPTH (just outside the 26 or next-in-line) ----
+  { name:'Yunus Musah', pos:'MID', tier:'bubble', club:'AC Milan', league:'Serie A', age:23, caps:0, goals:0, note:'Athletic carrier; surprise omission, pushes to return', form:[] },
+  { name:'Diego Luna', pos:'ATT', tier:'bubble', club:'Real Salt Lake', league:'MLS', age:22, caps:0, goals:0, note:'Breakout under Pochettino; debated cut, knocking hard', form:[] },
+  { name:'Johnny Cardoso', pos:'MID', tier:'bubble', club:'Atl\u00e9tico Madrid', league:'La Liga', age:24, caps:0, goals:0, note:'Deep-lying DM; LaLiga move raised his stock', form:[] },
+  { name:'Aidan Morris', pos:'MID', tier:'bubble', club:'Middlesbrough', league:'Championship', age:24, caps:0, goals:0, note:'Combative central mid; depth option', form:[] },
+  { name:'Josh Sargent', pos:'ST', tier:'bubble', club:'Norwich City', league:'Championship', age:26, caps:0, goals:0, note:'Prolific in the Championship; striker depth', form:[] },
+  { name:'Yunus Konak watch', pos:'MID', tier:'future', club:'\u2014', league:'\u2014', age:null, caps:0, goals:0, note:'Placeholder for next-cycle midfield risers', form:[] }
+];
+
+/* Pipeline — young / next-gen / dual-nationals to watch. */
+const PIPELINE = [
+  { name:'Cavan Sullivan', pos:'MID', club:'Man City (via Philadelphia)', league:'England', age:16, why:'Generational prospect; record-young MLS debut, City-bound. The face of the next cycle.', tag:'★ Crown jewel' },
+  { name:'Diego Luna', pos:'ATT', club:'Real Salt Lake', league:'MLS', age:22, why:'Broke through under Pochettino with fearless, direct play — a genuine difference-maker emerging.', tag:'Breakout' },
+  { name:'Paxten Aaronson', pos:'ATT', club:'Eintracht Frankfurt', league:'Bundesliga', age:22, why:'Brenden\u2019s younger brother; creative profile pushing for senior minutes.', tag:'Rising' },
+  { name:'Benjamin Cremaschi', pos:'MID', club:'Inter Miami', league:'MLS', age:21, why:'Composed midfielder developing alongside Messi; dual-national tie to Argentina makes his commitment one to watch.', tag:'Dual-national watch' },
+  { name:'Rokas Pukstas', pos:'MID', club:'Hajduk Split', league:'Croatia', age:21, why:'Box-to-box engine; Lithuania also courting him — a commitment still in play.', tag:'Dual-national watch' },
+  { name:'Esmir Bajraktarevic', pos:'ATT', club:'New England Revolution', league:'MLS', age:20, why:'Tricky winger; Bosnia eligibility makes his next cap-tying decision pivotal.', tag:'Dual-national watch' },
+  { name:'Keyrol Figueroa', pos:'ST', club:'Liverpool academy', league:'England', age:19, why:'Son of Honduran legend Maynor; prolific at youth level, eligible for USA and Honduras.', tag:'Dual-national watch' },
+  { name:'Quinn Sullivan', pos:'ATT', club:'Philadelphia Union', league:'MLS', age:21, why:'Versatile attacker getting USMNT looks; part of a deep Philadelphia pipeline.', tag:'Rising' }
+];
+
+/* Academy / youth prospects to watch, per club. Seeds the section so it's
+   never empty; live academy news layers on top via /api/news. Edit freely. */
+const ACADEMY = {
+  mancity:[
+    { name:'Cavan Sullivan', pos:'MID', age:16, why:'Generational US talent; City-bound from Philadelphia. The crown jewel of the EDS pipeline.' },
+    { name:'Divine Mukasa', pos:'ATT', age:18, why:'Skillful attacking midfielder rising fast through the academy ranks.' },
+    { name:'Stephen Mfuni', pos:'DEF', age:18, why:'Composed young centre-back tipped for first-team minutes.' }
+  ],
+  milan:[
+    { name:'Francesco Camarda', pos:'ST', age:18, why:'Italy youth striker; became Serie A\u2019s youngest-ever player. The future No.9.' },
+    { name:'Kevin Zeroli', pos:'MID', age:20, why:'Primavera captain; tidy two-way midfielder knocking on the first-team door.' }
+  ],
+  psv:[
+    { name:'Jong PSV watch', pos:'\u2014', age:null, why:'PSV\u2019s academy (a Dutch talent factory) consistently produces Eredivisie-ready youth — watch the Jong PSV side for the next breakouts.' }
+  ]
+};
+
+/* "Where it's headed" editorial takes. */
+const HEADED = [
+  { h:'The center of gravity moved to Europe', p:'For the first time in the modern era, the full World Cup roster plays top-flight club soccer — and more of them are in Europe than MLS. Pulisic at Milan, Balogun at Monaco, Pepi at PSV: the pool is getting elite reps weekly, not just in camps. That\u2019s the single biggest structural change since you last followed closely.' },
+  { h:'Striker is suddenly a strength', p:'Balogun, Pepi and Wright combined for ~56 club goals this season. After years of the U.S. lacking a finisher, there\u2019s now real competition at the No. 9 — a genuine luxury heading into a home World Cup.' },
+  { h:'Pochettino is betting on Europe-hardened players', p:'The hire signaled intent: a coach with elite pedigree pushing players to test themselves abroad. Results have been uneven through his first stretch, but the philosophy — more players outside MLS, higher standards — is the long game.' },
+  { h:'The pipeline is the most loaded it\u2019s ever been', p:'Cavan Sullivan headlines a wave of teenagers being recruited by Europe\u2019s biggest clubs. Add unresolved dual-national decisions (Cremaschi, Figueroa, Pukstas) and the next cycle\u2019s ceiling is the highest in U.S. history. Where it\u2019s headed: up — if the federation wins those commitment battles.' }
+];
+
+/* ================================================================
+   LIVE DATA — ESPN public API (client-side, CORS-friendly).
+   ================================================================ */
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
+
+function fmtDate(iso){
+  const d = new Date(iso);
+  return { day:d.getDate(), mon:d.toLocaleDateString('en-US',{month:'short'}),
+           time:d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
+           full:d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) };
+}
+
+async function fetchSchedule(league, teamId){
+  const url = `${ESPN}/${league}/teams/${teamId}/schedule`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('schedule '+r.status);
+  const j = await r.json();
+  return (j.events||[]).map(parseEvent).filter(Boolean);
+}
+
+/* Standings for a league. Returns array of {rank,name,gp,w,d,l,pts,teamId}. */
+async function fetchStandings(league){
+  const url = `${ESPN}/${league}/standings`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('standings '+r.status);
+  const j = await r.json();
+  // ESPN nests standings differently across endpoints; handle the common shapes.
+  let entries = null;
+  if(j.standings && j.standings.entries) entries = j.standings.entries;
+  else if(j.children && j.children[0] && j.children[0].standings) entries = j.children[0].standings.entries;
+  else if(j.content && j.content.standings && j.content.standings.groups) entries = j.content.standings.groups[0].standings.entries;
+  if(!entries) return [];
+  const getStat = (stats,keys)=>{ for(const k of keys){ const s=stats.find(x=>x.name===k||x.type===k||x.abbreviation===k); if(s) return s.displayValue||s.value; } return ''; };
+  return entries.map(e=>{
+    const st = e.stats||[];
+    return {
+      name: e.team.shortDisplayName||e.team.displayName,
+      teamId: e.team.id,
+      rank: getStat(st,['rank']),
+      gp: getStat(st,['gamesPlayed']),
+      w: getStat(st,['wins']),
+      d: getStat(st,['ties','draws']),
+      l: getStat(st,['losses']),
+      pts: getStat(st,['points'])
+    };
+  });
+}
+
+/* Compute last-5 league form for a club from its own schedule (live, no hardcoding). */
+function liveForm(events, teamName){
+  const done = events.filter(e=>e.state==='post');
+  const out=[];
+  for(const e of done){ const r=resultFor(e,teamName); if(r) out.push(r); }
+  return out.slice(-5);
+}
+
+function parseEvent(ev){
+  try{
+    const c = ev.competitions[0];
+    const home = c.competitors.find(x=>x.homeAway==='home');
+    const away = c.competitors.find(x=>x.homeAway==='away');
+    const st = ev.status || c.status;
+    const state = st.type.state; // pre | in | post
+    return {
+      id: ev.id,
+      date: ev.date,
+      comp: (ev.league && ev.league.abbreviation) || (c.notes&&c.notes[0]&&c.notes[0].headline) || (ev.season&&ev.season.slug) || 'Match',
+      compName: ev.shortName || '',
+      home:{ name:home.team.shortDisplayName||home.team.displayName, score:home.score, winner:home.winner, logo:home.team.logo },
+      away:{ name:away.team.shortDisplayName||away.team.displayName, score:away.score, winner:away.winner, logo:away.team.logo },
+      state, detail: st.type.shortDetail
+    };
+  }catch(e){ return null; }
+}
+
+function resultFor(ev, teamName){
+  if(ev.state!=='post') return null;
+  const us = ev.home.name===teamName?ev.home:(ev.away.name===teamName?ev.away:null);
+  if(!us) return null;
+  if(us.winner) return 'W';
+  const hs=+ev.home.score, as=+ev.away.score;
+  return hs===as?'D':'L';
+}
+
+function fixtureCard(ev, focusTeam){
+  const d = fmtDate(ev.date);
+  let right='';
+  if(ev.state==='post'){
+    const res = focusTeam?resultFor(ev,focusTeam):null;
+    right = `<div class="fx-score ${res?'res-'+res:''}">${ev.home.score}–${ev.away.score}</div><span class="badge ft">FT</span>`;
+  }else if(ev.state==='in'){
+    right = `<div class="fx-score">${ev.home.score}–${ev.away.score}</div><span class="badge live">LIVE</span>`;
+  }else{
+    right = `<div class="fx-time">${d.time}</div>`;
+  }
+  const comp = (ev.compName||ev.comp||'').toString().toUpperCase();
+  return `<div class="fx">
+    <div class="fx-date"><div class="d">${d.day}</div><div class="m">${d.mon}</div></div>
+    <div class="fx-main">
+      <div class="comp">${comp}</div>
+      <div class="teams">${ev.home.name}<span class="vs">v</span>${ev.away.name}</div>
+      <div class="meta">${ev.state==='pre'?d.full:ev.detail||''}</div>
+    </div>
+    <div class="fx-right">${right}</div>
+  </div>`;
+}
+
+/* ---- Clubs tab ---- */
+let activeClub = CLUBS[0];
+const clubCache = {};
+
+function renderClubSwitch(){
+  document.getElementById('clubSwitch').innerHTML = CLUBS.map(c=>
+    `<button class="club-chip ${c.key===activeClub.key?'active':''}" data-club="${c.key}">
+      <span class="dot" style="background:${c.color}"></span>${c.short}</button>`
+  ).join('');
+  document.querySelectorAll('[data-club]').forEach(b=>b.onclick=()=>{
+    activeClub = CLUBS.find(c=>c.key===b.dataset.club);
+    renderClubSwitch(); loadClub();
+  });
+}
+
+async function loadClub(){
+  const c = activeClub;
+  document.getElementById('clubLeagueNote').textContent = LEAGUE_LABEL[c.league]||'';
+  // transfer feed (instant, curated)
+  renderFeed(c.key);
+  // standings (live)
+  renderStanding(c);
+  // loans (live from Wikipedia) + academy (seed + live news)
+  loadLoans(c.key);
+  loadAcademy(c.key);
+  loadInjuries(c.key);
+  // fixtures (live)
+  const box = document.getElementById('clubFixtures');
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling ${c.short} fixtures…</div>`;
+  try{
+    let evs = clubCache[c.key];
+    if(!evs){ evs = await fetchSchedule(c.league,c.id); clubCache[c.key]=evs; }
+    const now = Date.now();
+    const past = evs.filter(e=>e.state==='post').slice(-4).reverse();
+    const live = evs.filter(e=>e.state==='in');
+    const upcoming = evs.filter(e=>e.state==='pre').slice(0,6);
+    const ordered = [...live, ...upcoming, ...past];
+    if(!ordered.length){ box.innerHTML = `<div class="empty">No fixtures returned right now. ESPN may be between seasons — check back on matchday.</div>`; return; }
+    box.innerHTML = ordered.map(e=>fixtureCard(e,c.name)).join('');
+    renderHealth(c, evs);
+    renderComps(c, evs);
+    stampUpdated();
+  }catch(e){
+    box.innerHTML = `<div class="empty">Couldn\u2019t reach ESPN for ${c.short} just now. Live data loads in your browser on deploy — if you\u2019re seeing this locally, try the deployed Vercel URL.</div>`;
+    document.getElementById('clubHealth').innerHTML = `<div class="empty">Health panel loads with live data on deploy.</div>`;
+    document.getElementById('clubComps').innerHTML = `<div class="empty">Competitions load with live data on deploy.</div>`;
+  }
+}
+
+/* Compute and render the club health panel from the schedule (all live). */
+function renderHealth(c, evs){
+  const box = document.getElementById('clubHealth');
+  const done = evs.filter(e=>e.state==='post');
+  if(!done.length){ box.innerHTML = `<div class="empty">No completed matches yet this season to compute health.</div>`; return; }
+
+  // last 10 (or fewer) for trend; full season for totals
+  const isUs = (ev)=>{ const key=c.name.toLowerCase().split(' ')[0]; return ev.home.name.toLowerCase().includes(key)?ev.home:(ev.away.name.toLowerCase().includes(key)?ev.away:null); };
+  let W=0,D=0,L=0,GF=0,GA=0, cleanSheets=0, scoredIn=0;
+  const formArr=[];
+  let curStreak=0, streakType='';
+  done.forEach(ev=>{
+    const us = isUs(ev); if(!us) return;
+    const them = us===ev.home?ev.away:ev.home;
+    const ugf=+us.score, uga=+them.score;
+    GF+=ugf; GA+=uga;
+    if(uga===0) cleanSheets++;
+    if(ugf>0) scoredIn++;
+    let r; if(us.winner||ugf>uga){r='W';W++;} else if(ugf===uga){r='D';D++;} else {r='L';L++;}
+    formArr.push(r);
+  });
+  // streak from most recent
+  const recent=[...formArr].reverse();
+  if(recent.length){ streakType=recent[0]; for(const r of recent){ if(r===streakType) curStreak++; else break; } }
+  const last5=formArr.slice(-5);
+  const ppg = ((W*3+D)/(W+D+L)).toFixed(2);
+  const last5pts = last5.reduce((a,r)=>a+(r==='W'?3:r==='D'?1:0),0);
+  const trend = last5pts>=11?'hot':last5pts<=4?'cold':'';
+  const gd = (GF-GA>=0?'+':'')+(GF-GA);
+  const streakLabel = curStreak>1 ? `${curStreak}${streakType} streak` : 'mixed run';
+
+  const pip = (r)=>`<span class="fp pip-${r}">${r}</span>`;
+  box.innerHTML = `
+    <div class="health">
+      <div class="cell ${trend==='hot'?'trend-hot':trend==='cold'?'trend-cold':''}">
+        <div class="hv">${last5pts}<span style="font-size:13px;color:var(--chalk-faint)">/15</span></div>
+        <div class="hk">Form (last 5)</div>
+        <div class="health-form">${last5.map(pip).join('')}</div>
+      </div>
+      <div class="cell"><div class="hv">${ppg}</div><div class="hk">Points / game</div><div class="hsub">${W}W ${D}D ${L}L</div></div>
+      <div class="cell"><div class="hv">${GF}</div><div class="hk">Goals for</div><div class="hsub">${(GF/done.length).toFixed(1)}/game</div></div>
+      <div class="cell"><div class="hv">${GA}</div><div class="hk">Goals against</div><div class="hsub">${(GA/done.length).toFixed(1)}/game</div></div>
+      <div class="cell ${GF-GA>=0?'trend-hot':'trend-cold'}"><div class="hv">${gd}</div><div class="hk">Goal diff</div><div class="hsub">${done.length} games</div></div>
+      <div class="cell"><div class="hv">${cleanSheets}</div><div class="hk">Clean sheets</div><div class="hsub">${Math.round(cleanSheets/done.length*100)}% of games</div></div>
+      <div class="cell"><div class="hv">${Math.round(scoredIn/done.length*100)}%</div><div class="hk">Scored in</div><div class="hsub">${scoredIn}/${done.length} games</div></div>
+      <div class="cell ${streakType==='W'&&curStreak>1?'trend-hot':streakType==='L'&&curStreak>1?'trend-cold':''}"><div class="hv">${curStreak>1?curStreak+streakType:'—'}</div><div class="hk">Current streak</div><div class="hsub">${streakLabel}</div></div>
+    </div>`;
+}
+
+/* Detect the competitions a club is active in, from its fixture list. */
+function renderComps(c, evs){
+  const box = document.getElementById('clubComps');
+  if(!box) return;
+  // classify a competition by name into continental / cup / league
+  const classify = (name)=>{
+    const n = (name||'').toLowerCase();
+    if(/champions league|europa|conference|uefa/.test(n)) return 'cont';
+    if(/cup|copa|coupe|coppa|pokal|trophy|shield|knvb|beker/.test(n)) return 'cup';
+    return 'league';
+  };
+  const label = (name)=>{
+    const n=(name||'').toLowerCase();
+    if(/champions league/.test(n)) return 'UEFA Champions League';
+    if(/europa league/.test(n)) return 'UEFA Europa League';
+    if(/conference/.test(n)) return 'UEFA Conference League';
+    if(/fa cup/.test(n)) return 'FA Cup';
+    if(/efl|carabao|league cup/.test(n)) return 'EFL Cup';
+    if(/coppa/.test(n)) return 'Coppa Italia';
+    if(/coupe/.test(n)) return 'Coupe de France';
+    if(/knvb|beker/.test(n)) return 'KNVB Beker';
+    if(/pokal/.test(n)) return 'DFB-Pokal';
+    return name;
+  };
+  // group fixtures by competition
+  const comps = {};
+  evs.forEach(e=>{
+    const raw = (e.compName||e.comp||'').toString().trim();
+    if(!raw) return;
+    const key = label(raw);
+    if(!comps[key]) comps[key] = { name:key, type:classify(raw), next:null, last:null, count:0 };
+    comps[key].count++;
+    if(e.state==='pre' && !comps[key].next) comps[key].next = e;
+    if(e.state==='post') comps[key].last = e;
+  });
+  const list = Object.values(comps);
+  // surface continental + cups first, then the league
+  list.sort((a,b)=>{ const order={cont:0,cup:1,league:2}; return order[a.type]-order[b.type]; });
+  if(!list.length){ box.innerHTML = `<div class="empty">Competition data fills in from the fixture list once matches are scheduled.</div>`; return; }
+  box.innerHTML = `<div class="comps">${list.map(cp=>{
+    let meta='';
+    if(cp.next){ const d=fmtDate(cp.next.date); meta = `${d.mon} ${d.day}`; }
+    else if(cp.last){ meta = 'last: '+`${cp.last.home.name} ${cp.last.home.score}-${cp.last.away.score} ${cp.last.away.name}`; }
+    const nextLine = cp.next ? `Next: ${cp.next.home.name} v ${cp.next.away.name}` :
+      (cp.last ? 'No upcoming fixture listed' : '');
+    const tag = cp.type==='cont'?'Continental':cp.type==='cup'?'Domestic cup':'League';
+    return `<div class="comp-row ${cp.type}">
+      <div><div class="cname">${cp.name}</div><div class="cnext">${nextLine}</div></div>
+      <div class="cmeta"><span class="ctag">${tag}</span><br>${meta}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+const standingCache = {};
+
+/* Live transfer/club news from the serverless /api/news function (RSS, server-side). */
+const newsCache = {};
+async function renderFeed(key){
+  const box = document.getElementById('clubFeed');
+  const club = CLUBS.find(c=>c.key===key);
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling ${club.short} headlines…</div>`;
+  try{
+    if(!newsCache[key]){
+      const r = await fetch(`/api/news?topic=club&team=${encodeURIComponent(club.name)}`);
+      newsCache[key] = await r.json();
+    }
+    const data = newsCache[key];
+    const items = (data && data.items) || [];
+    if(!items.length){
+      box.innerHTML = `<div class="empty">No ${club.short} headlines in the feed right now. News refreshes automatically as stories break.</div>`;
+      return;
+    }
+    box.innerHTML = items.map(n=>{
+      const when = n.date ? new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+      const isTransfer = /transfer|fee|deal|sign|loan|bid|medical|agree|target|linked|contract/i.test(n.title);
+      const tier = isTransfer ? 'rumor' : 'cold';
+      const tierLabel = isTransfer ? 'Transfer' : 'News';
+      return `<a class="feed-item" href="${n.link}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+        <div class="feed-rail"><span class="feed-tier tier-${tier}">${tierLabel}</span></div>
+        <div class="feed-body">
+          <div class="headline"><span class="name">${n.title}</span></div>
+          ${n.desc?`<div class="detail">${n.desc}</div>`:''}
+          <div class="src">${n.source}${when?' · '+when:''} ↗</div>
+        </div>
+      </a>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = `<div class="empty">News feed loads via the /api/news function once deployed to Vercel. If you\u2019re opening this file locally, the function isn\u2019t running — push to Vercel to see live headlines.</div>`;
+  }
+}
+async function renderStanding(c){
+  const box = document.getElementById('clubStanding');
+  box.innerHTML = `<div class="standing"><div class="standing-cap">Loading ${LEAGUE_LABEL[c.league]||'league'} table…</div></div>`;
+  try{
+    let rows = standingCache[c.league];
+    if(!rows){ rows = await fetchStandings(c.league); standingCache[c.league]=rows; }
+    if(!rows.length){ box.innerHTML=''; return; }
+    // window the table around our club: show top 4 + our club's neighbourhood
+    const idx = rows.findIndex(r=>r.teamId===c.id || r.name===c.short || r.name===c.name);
+    let view;
+    if(idx<=5){ view = rows.slice(0,8); }
+    else{ view = [...rows.slice(0,3), null, ...rows.slice(idx-1, idx+2)]; }
+    const body = view.map(r=>{
+      if(!r) return `<tr><td class="rank">⋯</td><td class="l" style="color:var(--chalk-faint)">…</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      const me = (r.teamId===c.id||r.name===c.short||r.name===c.name)?'me':'';
+      return `<tr class="${me}">
+        <td class="rank">${r.rank||''}</td>
+        <td class="l">${r.name}</td>
+        <td>${r.gp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
+        <td class="pts">${r.pts}</td></tr>`;
+    }).join('');
+    box.innerHTML = `<div class="standing"><table>
+      <thead><tr><th>#</th><th class="l">Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+  }catch(e){
+    box.innerHTML = `<div class="standing"><div class="standing-cap">League table loads live on deploy. If you\u2019re local and seeing this, try the Vercel URL.</div></div>`;
+  }
+}
+
+/* Out-on-loan players, live from /api/club-data (Wikipedia season page). */
+const loanCache = {};
+async function loadLoans(key){
+  const box = document.getElementById('clubLoans');
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling loan list…</div>`;
+  try{
+    if(!loanCache[key]){
+      const r = await fetch(`/api/club-data?club=${encodeURIComponent(key)}`);
+      loanCache[key] = await r.json();
+    }
+    const data = loanCache[key];
+    const loans = (data && data.loans) || [];
+    if(!loans.length){
+      box.innerHTML = `<div class="empty">No players currently out on loan, or the season page isn\u2019t up yet. Refreshes automatically.</div>`;
+      return;
+    }
+    box.innerHTML = loans.map((l,i)=>`
+      <div class="pcard">
+        <span class="pos">LOAN</span>
+        <div class="pname">${l.player}</div>
+        ${l.dest?`<div class="pclub">→ ${l.dest}</div>`:'<div class="pleague">On loan</div>'}
+        <div class="pstat"><div class="s"><span class="v" data-loanage="${i}">—</span><span class="k">Age</span></div></div>
+      </div>`).join('');
+    fillLoanAges(key, loans);
+  }catch(e){
+    box.innerHTML = `<div class="empty">Loan data loads via /api/club-data once deployed to Vercel. Open the deployed URL to see it.</div>`;
+  }
+}
+
+/* Pull ages for loaned players live from /api/player (best-effort by name). */
+async function fillLoanAges(key, loans){
+  const club = CLUBS.find(c=>c.key===key);
+  const league = club ? club.league : '';
+  await Promise.all(loans.map(async (l,i)=>{
+    try{
+      const r = await fetch(`/api/player?name=${encodeURIComponent(l.player)}&league=${encodeURIComponent(league)}`);
+      const data = await r.json();
+      const age = data && data.bio && data.bio.age;
+      if(age){ const slot=document.querySelector(`[data-loanage="${i}"]`); if(slot) slot.textContent=age; }
+    }catch(e){ /* leave dash */ }
+  }));
+}
+
+/* Academy watch: curated seed cards + live youth/academy news layered on top. */
+async function loadAcademy(key){
+  const grid = document.getElementById('clubAcademy');
+  const newsWrap = document.getElementById('clubAcademyNews');
+  const seed = ACADEMY[key] || [];
+  grid.innerHTML = seed.length ? seed.map((p,i)=>`
+    <div class="pcard prospect">
+      <span class="pos">${p.pos}</span>
+      <div class="pname">${p.name}</div>
+      ${p.age!=null?`<div class="pstat"><div class="s"><span class="v" data-acage="${key}-${i}">${p.age}</span><span class="k">Age</span></div></div>`:''}
+      <div class="pwhy">${p.why}</div>
+    </div>`).join('') : `<div class="empty">No seeded academy names for this club yet.</div>`;
+  // refresh academy ages live (keeps seed accurate)
+  seed.forEach(async (p,i)=>{
+    if(p.age==null) return;
+    try{
+      const club=CLUBS.find(c=>c.key===key);
+      const r=await fetch(`/api/player?name=${encodeURIComponent(p.name)}&league=${encodeURIComponent(club?club.league:'')}`);
+      const data=await r.json();
+      const age=data&&data.bio&&data.bio.age;
+      if(age){ const slot=document.querySelector(`[data-acage="${key}-${i}"]`); if(slot) slot.textContent=age; }
+    }catch(e){}
+  });
+  // live academy news for this club
+  newsWrap.innerHTML = `<div class="loading"><div class="spinner"></div>Scanning youth news…</div>`;
+  try{
+    const club = CLUBS.find(c=>c.key===key);
+    const r = await fetch(`/api/news?topic=club&team=${encodeURIComponent(club.name)}`);
+    const data = await r.json();
+    const items = (data && data.items) || [];
+    const youth = items.filter(n=>/academy|youth|teen|wonderkid|prospect|U-?2[0-3]|under-2[0-3]|primavera|EDS|debut|young/i.test(n.title+' '+n.desc)).slice(0,5);
+    if(!youth.length){ newsWrap.innerHTML=''; return; }
+    newsWrap.innerHTML = `<div class="feed">${youth.map(n=>{
+      const when=n.date?new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+      return `<a class="feed-item" href="${n.link}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+        <div class="feed-rail"><span class="feed-tier tier-rumor">Youth</span></div>
+        <div class="feed-body"><div class="headline"><span class="name">${n.title}</span></div>
+        ${n.desc?`<div class="detail">${n.desc}</div>`:''}
+        <div class="src">${n.source}${when?' · '+when:''} ↗</div></div></a>`;
+    }).join('')}</div>`;
+  }catch(e){ newsWrap.innerHTML=''; }
+}
+
+/* Injury & fitness watch: filter the club's headlines for injury/fitness terms. */
+async function loadInjuries(key){
+  const box = document.getElementById('clubInjuries');
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Scanning injury news…</div>`;
+  try{
+    const club = CLUBS.find(c=>c.key===key);
+    if(!newsCache[key]){
+      const r = await fetch(`/api/news?topic=club&team=${encodeURIComponent(club.name)}`);
+      newsCache[key] = await r.json();
+    }
+    const items = (newsCache[key] && newsCache[key].items) || [];
+    const inj = items.filter(n=>/injur|fitness|out for|ruled out|sidelin|knock|strain|hamstring|acl|surgery|return|setback|doubt|recovery|comeback|fit again|layoff/i.test(n.title+' '+n.desc)).slice(0,6);
+    if(!inj.length){
+      box.innerHTML = `<div class="empty">No injury or fitness headlines for ${club.short} right now — a healthy sign. Refreshes automatically.</div>`;
+      return;
+    }
+    box.innerHTML = inj.map(n=>{
+      const when=n.date?new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+      return `<a class="feed-item injury-item" href="${n.link}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+        <div class="feed-rail"><span class="feed-tier">Fitness</span></div>
+        <div class="feed-body"><div class="headline"><span class="name">${n.title}</span></div>
+        ${n.desc?`<div class="detail">${n.desc}</div>`:''}
+        <div class="src">${n.source}${when?' · '+when:''} ↗</div></div></a>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = `<div class="empty">Injury watch loads via /api/news once deployed.</div>`;
+  }
+}
+
+/* ---- USMNT tab ---- */
+async function loadUSMNT(){
+  const box = document.getElementById('usmntFixtures');
+  const hero = document.getElementById('usmntNext');
+  const tbox = document.getElementById('usmntTournament');
+  try{
+    // ESPN national teams live under 'fifa.world' team schedule; USMNT id 660
+    let evs = await fetchSchedule('fifa.world','660').catch(()=>null);
+    if(!evs || !evs.length){ evs = await fetchSchedule('usa.1','660').catch(()=>[]); }
+    const live = evs.filter(e=>e.state==='in');
+    const upcoming = evs.filter(e=>e.state==='pre');
+    const past = evs.filter(e=>e.state==='post').slice(-5).reverse();
+    const nextEv = live[0]||upcoming[0];
+
+    // ---- live tournament detection ----
+    renderTournament(tbox, evs, nextEv);
+    renderGroup(evs);
+
+    if(nextEv){
+      const d = fmtDate(nextEv.date);
+      const comp = nextEv.compName || detectComp(nextEv) || 'International fixture';
+      hero.innerHTML = `<div class="lbl">Next up for the USA</div>
+        <div class="match">${nextEv.home.name} <span style="color:var(--chalk-faint)">vs</span> ${nextEv.away.name}</div>
+        <div class="when">${d.full} · ${d.time}${comp?' · '+comp:''}</div>
+        <div class="ctx">Every club performance in the tabs above feeds straight into this — the pool\u2019s form is the story heading into kickoff.</div>`;
+    }else{
+      hero.innerHTML = `<div class="lbl">USMNT</div><div class="match">No upcoming match listed</div>
+        <div class="ctx">Between windows — ESPN populates the next fixture automatically when it\u2019s scheduled.</div>`;
+    }
+    const ordered=[...live,...upcoming.slice(0,6),...past];
+    box.innerHTML = ordered.length? ordered.map(e=>fixtureCard(e,'USA')).join('')
+      : `<div class="empty">No USMNT fixtures returned right now.</div>`;
+    stampUpdated();
+  }catch(e){
+    hero.innerHTML = `<div class="lbl">USMNT</div><div class="match">Schedule loads on deploy</div>`;
+    box.innerHTML = `<div class="empty">Live USMNT data loads in your browser. If local, try the deployed URL.</div>`;
+  }
+}
+
+/* Pull a competition label off an event from any field ESPN populates. */
+function detectComp(ev){
+  return (ev.compName||ev.comp||'').toString().replace(/\s+/g,' ').trim();
+}
+
+/* Detect the USA's current/next tournament by scanning fixture competition names. */
+function renderTournament(tbox, evs, nextEv){
+  if(!tbox) return;
+  const TOURN = [
+    { key:/world cup/i,        name:'FIFA World Cup 2026',        host:'USA · Canada · Mexico' },
+    { key:/gold cup/i,         name:'Concacaf Gold Cup',          host:'North America' },
+    { key:/nations league/i,   name:'Concacaf Nations League',    host:'North America' },
+    { key:/copa am[eé]rica/i,  name:'Copa América',               host:'Americas' },
+    { key:/qualif/i,           name:'World Cup Qualifying',        host:'Concacaf' },
+    { key:/friendly|international/i, name:'International Friendlies', host:'Various' }
+  ];
+  // look at upcoming + live events for a recognizable competition
+  const pool = evs.filter(e=>e.state!=='post');
+  let found=null, count=0, sample=null;
+  for(const t of TOURN){
+    const matches = pool.filter(e=>t.key.test(detectComp(e)) || t.key.test(e.compName||''));
+    if(matches.length){ found=t; count=matches.length; sample=matches[0]; break; }
+  }
+  if(!found){
+    // fall back to whatever the next fixture's competition is, if any
+    const c = nextEv?detectComp(nextEv):'';
+    if(c){ tbox.innerHTML = `<div class="tourn"><div class="tlbl">Current competition</div>
+      <div class="tname">${c}</div>
+      <div class="tmeta">Detected live from the USA\u2019s fixture list.</div></div>`; }
+    else { tbox.innerHTML=''; }
+    return;
+  }
+  const next3 = pool.filter(e=>found.key.test(detectComp(e))).slice(0,3)
+    .map(e=>{ const d=fmtDate(e.date); return `${d.mon} ${d.day}: ${e.home.name} v ${e.away.name}`; }).join(' · ');
+  const stage = sample && sample.compName && /group|round|final|quarter|semi/i.test(sample.compName)
+    ? sample.compName : null;
+  tbox.innerHTML = `<div class="tourn">
+    <div class="tlbl">USA · Active tournament</div>
+    <div class="tname">${found.name}</div>
+    <div class="tmeta">${found.host}${count?` · ${count} fixture${count>1?'s':''} ahead`:''}</div>
+    ${stage?`<span class="tstage">${stage}</span>`:''}
+    ${next3?`<div class="tmeta" style="margin-top:10px">${next3}</div>`:''}
+  </div>`;
+}
+
+/* USMNT group table + qualification scenario, when in a group-stage tournament. */
+async function renderGroup(evs){
+  const box = document.getElementById('usmntGroup');
+  if(!box) return;
+  // only show during a group-stage competition
+  const inGroup = evs.some(e=>/group/i.test(e.compName||'') && (e.state==='post'||e.state==='in'||e.state==='pre'));
+  if(!inGroup){ box.innerHTML=''; return; }
+
+  // compute USA's own group-stage record from their fixtures
+  const gGames = evs.filter(e=>/group/i.test(e.compName||''));
+  const played = gGames.filter(e=>e.state==='post');
+  let W=0,D=0,L=0,GF=0,GA=0,pts=0;
+  const isUs=(ev)=> ev.home.name==='USA'||/united states/i.test(ev.home.name)?ev.home:(ev.away.name==='USA'||/united states/i.test(ev.away.name)?ev.away:null);
+  played.forEach(ev=>{
+    const us=isUs(ev); if(!us) return; const them=us===ev.home?ev.away:ev.home;
+    const f=+us.score,a=+them.score; GF+=f;GA+=a;
+    if(us.winner||f>a){W++;pts+=3;} else if(f===a){D++;pts+=1;} else L++;
+  });
+  const gp=W+D+L;
+  const remaining = gGames.filter(e=>e.state!=='post').length;
+
+  // try to pull the live group standings table from ESPN
+  let tableHTML='';
+  try{
+    const r = await fetch(`${ESPN}/fifa.world/standings`);
+    if(r.ok){
+      const j = await r.json();
+      // find the group containing USA
+      let groups = j.children || (j.standings?[{standings:j.standings}]:[]);
+      let usaGroup=null;
+      for(const g of (groups||[])){
+        const entries = g.standings?.entries || [];
+        if(entries.some(e=>/united states|usa/i.test(e.team.displayName||e.team.shortDisplayName||''))){ usaGroup={name:g.name||g.abbreviation||'Group',entries}; break; }
+      }
+      if(usaGroup){
+        const rows = usaGroup.entries.map(e=>{
+          const st=e.stats||[]; const gv=(k)=>{const s=st.find(x=>x.name===k||x.type===k);return s?(s.displayValue??s.value):'';};
+          return { name:e.team.shortDisplayName||e.team.displayName, rank:gv('rank'), gp:gv('gamesPlayed'), w:gv('wins'), d:gv('ties')||gv('draws'), l:gv('losses'), pts:gv('points'), us:/united states|usa/i.test(e.team.displayName||e.team.shortDisplayName||'') };
+        });
+        tableHTML = `<div class="group-box"><div class="gcap"><span>${usaGroup.name} — live table</span></div>
+          <table><thead><tr><th>#</th><th class="l">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead>
+          <tbody>${rows.map((r,idx)=>`<tr class="${r.us?'usa':''} ${idx<2?'qual':''}">
+            <td class="rank">${r.rank||idx+1}</td><td class="l">${r.name}</td>
+            <td>${r.gp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td class="pts">${r.pts}</td></tr>`).join('')}</tbody></table></div>`;
+      }
+    }
+  }catch(e){ /* fall through to scenario only */ }
+
+  // scenario text from USA's own record
+  let scenario='';
+  if(gp===0){ scenario = `Group stage ahead: ${remaining} matches to play. Top two in the group advance to the Round of 32, plus the eight best third-placed teams across all groups.`; }
+  else {
+    let s = `Through ${gp} game${gp>1?'s':''}: ${W}W-${D}D-${L}L, ${pts} point${pts!==1?'s':''} (${GF} for, ${GA} against). `;
+    if(remaining===0){ s += pts>=6?'A strong haul — almost certainly through.':pts>=4?'Likely enough to advance, possibly as a best third-placed side.':'Will need results elsewhere to sneak through on third-place tiebreakers.'; }
+    else if(remaining===1){ s += pts>=4?'A win or draw in the finale should seal advancement.':pts===3?'A win likely guarantees it; a draw may need other results.':'Needs a win in the final game and some help.'; }
+    else { s += pts>=3?'Good start — control of the group is in reach with wins to come.':'Plenty to play for; the next results are pivotal.'; }
+    scenario = s;
+  }
+
+  box.innerHTML = tableHTML + `<div class="scenario"><h4>Road to the knockouts</h4><p>${scenario}</p></div>`;
+}
+
+/* Live USMNT news from /api/news. */
+let usmntNewsLoaded=false;
+async function loadUSMNTNews(){
+  if(usmntNewsLoaded) return; usmntNewsLoaded=true;
+  const box=document.getElementById('usmntFeed');
+  try{
+    const r=await fetch('/api/news?topic=usmnt');
+    const data=await r.json();
+    const items=(data&&data.items)||[];
+    if(!items.length){ box.innerHTML=`<div class="empty">No USMNT headlines in the feed right now — refreshes automatically.</div>`; return; }
+    box.innerHTML=items.map(n=>{
+      const when=n.date?new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+      return `<a class="feed-item" href="${n.link}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+        <div class="feed-rail"><span class="feed-tier tier-advanced">USMNT</span></div>
+        <div class="feed-body">
+          <div class="headline"><span class="name">${n.title}</span></div>
+          ${n.desc?`<div class="detail">${n.desc}</div>`:''}
+          <div class="src">${n.source}${when?' · '+when:''} ↗</div>
+        </div></a>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML=`<div class="empty">USMNT newswire loads via /api/news once deployed to Vercel.</div>`;
+  }
+}
+
+/* ---- Pool In Action This Week ---- */
+async function loadAction(){
+  const box = document.getElementById('actionList');
+  // unique clubs among pool players that we have ESPN ids for
+  const clubs = [...new Set(POOL.map(p=>p.club))].filter(c=>CLUB_ESPN[c]);
+  const now = Date.now();
+  const weekEnd = now + 8*24*60*60*1000; // next 8 days
+  const results = [];
+  await Promise.all(clubs.map(async club=>{
+    const ref = CLUB_ESPN[club];
+    try{
+      const evs = await fetchSchedule(ref.league, ref.id);
+      const next = evs.find(e=>{
+        const t = new Date(e.date).getTime();
+        return (e.state==='pre' || e.state==='in') && t>=now-3*60*60*1000 && t<=weekEnd;
+      });
+      if(next){
+        const opp = next.home.name.toLowerCase().includes(club.toLowerCase().split(' ')[0])
+          ? next.away.name : next.home.name;
+        const homeAway = next.home.name.toLowerCase().includes(club.toLowerCase().split(' ')[0])?'vs':'@';
+        POOL.filter(p=>p.club===club).forEach(p=>{
+          results.push({ player:p.name, pos:p.pos, club, opp, homeAway, date:next.date, comp:next.compName||'' });
+        });
+      }
+    }catch(e){ /* skip clubs that fail */ }
+  }));
+  results.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(!results.length){
+    box.innerHTML = `<div class="empty">No pool fixtures in the next week, or ESPN is between matchdays. This fills in automatically when games are scheduled.</div>`;
+    return;
+  }
+  box.innerHTML = results.map(r=>{
+    const d = new Date(r.date);
+    const dn = d.toLocaleDateString('en-US',{weekday:'short'});
+    const dt = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    return `<div class="action-item">
+      <div class="day"><div class="dn">${dn}</div><div class="dt">${dt}</div></div>
+      <div class="who"><div class="pn">${r.player}</div><div class="pc">${r.club}</div></div>
+      <div class="fixture"><span class="opp">${r.homeAway} ${r.opp}</span>${r.comp?'<br>'+r.comp:''}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ---- Pool tab ---- */
+function pip(arr){ return `<div class="form-row">${arr.map(r=>`<span class="form-pip pip-${r}">${r}</span>`).join('')}</div>`; }
+function renderPool(){
+  const TIERS = [
+    { key:'lock',   label:'The 26 — Locks',    note:'Named to the World Cup squad' },
+    { key:'likely', label:'Likely',            note:'In the mix for minutes' },
+    { key:'bubble', label:'Bubble / Depth',    note:'Just outside, next in line' },
+    { key:'future', label:'Future Watch',      note:'Next-cycle names' }
+  ];
+  const card = (p,i)=>`
+    <div class="pcard" data-pcard="${i}">
+      <span class="pos">${p.pos}</span>
+      <div class="pname">${p.name}</div>
+      <div class="pclub">${p.club}</div>
+      <div class="pleague">${p.league}</div>
+      <div class="pstat">
+        <div class="s"><span class="v" data-age="${i}">${p.age||'—'}</span><span class="k">Age</span></div>
+        ${(p.caps||p.goals)?`<div class="s"><span class="v">${p.caps}</span><span class="k">Int'l caps</span></div>
+        <div class="s"><span class="v">${p.goals}</span><span class="k">Int'l gls</span></div>`:''}
+      </div>
+      ${p.note?`<div class="pwhy">${p.note}</div>`:''}
+      <div class="pstats-slot" data-stats="${p.name}|${escAttr(clubLeague(p.club))}"></div>
+      <div class="form-slot" data-form="${i}">${p.form&&p.form.length?pip(p.form):''}</div>
+    </div>`;
+  const posOrder = { GK:0, DEF:1, MID:2, ST:3, ATT:4 };
+  let html='';
+  TIERS.forEach(t=>{
+    const members = POOL.map((p,i)=>({p,i})).filter(x=>x.p.tier===t.key);
+    if(!members.length) return;
+    members.sort((a,b)=>(posOrder[a.p.pos]??9)-(posOrder[b.p.pos]??9));
+    html += `<div class="tier-head"><span class="tier-badge tier-${t.key}">${t.label}</span><span class="tier-count">${members.length}</span><span class="tier-note">${t.note}</span></div>`;
+    html += `<div class="pool-grid">${members.map(x=>card(x.p,x.i)).join('')}</div>`;
+  });
+  document.getElementById('poolGrid').innerHTML = html;
+  upgradePoolForm();
+  upgradePoolAges();
+  lazyLoadStats('poolGrid');
+}
+
+/* league slug for a club name, for the player-stats lookup hint */
+function clubLeague(club){ return (CLUB_ESPN[club] && CLUB_ESPN[club].league) || ''; }
+function escAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+
+/* Deep per-player season stats via /api/player. Lazy: only fetch cards in view. */
+const statCache = {};
+const STAT_LABELS = { appearances:'Apps', goals:'Goals', assists:'Assists', minutes:'Mins', shots:'Shots', shotsOnTarget:'On tgt', yellowCards:'Yel', redCards:'Red', cleanSheets:'CS', saves:'Saves', goalsConceded:'GA', foulsCommitted:'Fouls' };
+const STAT_ORDER = ['appearances','goals','assists','minutes','shots','shotsOnTarget','cleanSheets','saves','goalsConceded','yellowCards','redCards','foulsCommitted'];
+
+async function fillStats(slot){
+  const [name, league] = slot.dataset.stats.split('|');
+  slot.innerHTML = `<div class="pstats-loading">Loading club stats<span class="dot3"><i></i><i></i><i></i></span></div>`;
+  try{
+    const ck = name+'|'+league;
+    if(!statCache[ck]){
+      const r = await fetch(`/api/player?name=${encodeURIComponent(name)}&league=${encodeURIComponent(league)}`);
+      statCache[ck] = await r.json();
+    }
+    const data = statCache[ck];
+    const stats = (data && data.stats) || {};
+    const keys = STAT_ORDER.filter(k=>stats[k]!=null && stats[k]!=='');
+    if(!keys.length){ slot.innerHTML = `<div class="pstats-loading" style="color:var(--chalk-faint)">No club stats in ESPN for this player.</div>`; return; }
+    slot.innerHTML = `<div class="pstats">${keys.map(k=>`
+      <div class="ps"><span class="pv">${stats[k]}</span><span class="pk">${STAT_LABELS[k]}</span></div>`).join('')}</div>`;
+  }catch(e){
+    slot.innerHTML = `<div class="pstats-loading" style="color:var(--chalk-faint)">Club stats load on deploy (via /api/player).</div>`;
+  }
+}
+
+/* IntersectionObserver: fetch stats only when a card scrolls near view (saves calls). */
+let statObserver=null;
+function lazyLoadStats(gridId){
+  const slots = document.querySelectorAll(`#${gridId} .pstats-slot`);
+  if(!('IntersectionObserver' in window)){ slots.forEach(fillStats); return; }
+  if(!statObserver){
+    statObserver = new IntersectionObserver((entries)=>{
+      entries.forEach(en=>{ if(en.isIntersecting){ fillStats(en.target); statObserver.unobserve(en.target); } });
+    }, { rootMargin:'200px' });
+  }
+  slots.forEach(s=>statObserver.observe(s));
+}
+
+/* Refresh ages live from ESPN team rosters so they never drift. */
+async function upgradePoolAges(){
+  const clubs = [...new Set(POOL.map(p=>p.club))].filter(c=>CLUB_ESPN[c]);
+  await Promise.all(clubs.map(async club=>{
+    const ref = CLUB_ESPN[club];
+    try{
+      const r = await fetch(`${ESPN}/${ref.league}/teams/${ref.id}/roster`);
+      if(!r.ok) return;
+      const j = await r.json();
+      const athletes = (j.athletes||[]).flatMap(g=>g.items||g.athletes||(Array.isArray(g)?g:[g])).filter(Boolean);
+      const flat = athletes.length?athletes:(j.athletes||[]);
+      POOL.forEach((p,i)=>{
+        if(p.club!==club) return;
+        const last = p.name.split(' ').slice(-1)[0].toLowerCase();
+        const match = flat.find(a=>(a.fullName||a.displayName||'').toLowerCase().includes(last));
+        if(match && match.age){
+          const slot = document.querySelector(`[data-age="${i}"]`);
+          if(slot) slot.textContent = match.age;
+        }
+      });
+    }catch(e){ /* keep baseline age */ }
+  }));
+}
+
+/* Replace hardcoded pips with live last-5 form, pulled once per club. */
+async function upgradePoolForm(){
+  const clubs = [...new Set(POOL.map(p=>p.club))].filter(c=>CLUB_ESPN[c]);
+  await Promise.all(clubs.map(async club=>{
+    const ref = CLUB_ESPN[club];
+    try{
+      const evs = await fetchSchedule(ref.league, ref.id);
+      // figure the club's display name as ESPN returns it (from a finished game)
+      let teamName = null;
+      const done = evs.filter(e=>e.state==='post');
+      for(const e of done){
+        const key = club.toLowerCase().split(' ')[0];
+        if(e.home.name.toLowerCase().includes(key)) { teamName=e.home.name; break; }
+        if(e.away.name.toLowerCase().includes(key)) { teamName=e.away.name; break; }
+      }
+      if(!teamName) return;
+      const form = liveForm(evs, teamName);
+      if(!form.length) return;
+      POOL.forEach((p,i)=>{ if(p.club===club){
+        const slot = document.querySelector(`[data-form="${i}"]`);
+        if(slot) slot.innerHTML = pip(form);
+      }});
+    }catch(e){ /* keep fallback */ }
+  }));
+}
+
+/* ---- old pool render removed ---- */
+/* ---- Pipeline tab ---- */
+// map the pipeline's free-text league to an ESPN slug hint (best-effort).
+const LEAGUE_SLUG_HINT = { 'England':'eng.1','MLS':'usa.1','Bundesliga':'ger.1','Croatia':'cro.1','Serie A':'ita.1','Ligue 1':'fra.1','Eredivisie':'ned.1','Scottish Prem':'sco.1','Championship':'eng.2' };
+function renderPipeline(){
+  document.getElementById('pipelineGrid').innerHTML = PIPELINE.map(p=>`
+    <div class="pcard prospect">
+      <span class="pos">${p.pos}</span>
+      <div class="pname">${p.name}</div>
+      <div class="pclub">${p.club}</div>
+      <div class="pleague">${p.league}</div>
+      <div class="ptag">${p.tag}</div>
+      <div class="pwhy">${p.why}</div>
+      <div class="pstats-slot" data-stats="${p.name}|${escAttr(LEAGUE_SLUG_HINT[p.league]||'')}"></div>
+      <span class="page">${p.age}</span>
+    </div>`).join('');
+  loadProspectNews();
+  lazyLoadStats('pipelineGrid');
+}
+
+/* Live: surface USMNT headlines mentioning young/emerging/prospect/academy players. */
+let prospectNewsLoaded=false;
+async function loadProspectNews(){
+  if(prospectNewsLoaded) return; prospectNewsLoaded=true;
+  const wrap=document.getElementById('prospectNews');
+  if(!wrap) return;
+  try{
+    const r=await fetch('/api/news?topic=usmnt');
+    const data=await r.json();
+    const items=(data&&data.items)||[];
+    const young=items.filter(n=>/young|teen|prospect|academy|wonderkid|breakout|18|19|20|under-2|U-?2|debut|call-up|youngster|next gen/i.test(n.title+' '+n.desc));
+    const show=(young.length?young:items).slice(0,6);
+    if(!show.length){ wrap.innerHTML=''; return; }
+    wrap.innerHTML=`<div class="section-head"><h2>Emerging — In The News</h2><span class="note">Live · auto-pulled</span></div>
+      <div class="feed">${show.map(n=>{
+        const when=n.date?new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+        return `<a class="feed-item" href="${n.link}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+          <div class="feed-rail"><span class="feed-tier tier-rumor">Watch</span></div>
+          <div class="feed-body"><div class="headline"><span class="name">${n.title}</span></div>
+          ${n.desc?`<div class="detail">${n.desc}</div>`:''}
+          <div class="src">${n.source}${when?' · '+when:''} ↗</div></div></a>`;
+      }).join('')}</div>`;
+  }catch(e){ wrap.innerHTML=''; }
+}
+
+/* ---- Headed tab ---- */
+function renderHeaded(){
+  document.getElementById('headedContent').innerHTML = HEADED.map(t=>`
+    <div class="take"><h3>${t.h}</h3><p>${t.p}</p></div>`).join('');
+}
+
+/* ---- updated stamp ---- */
+function stampUpdated(){
+  document.getElementById('globalUpdated').textContent =
+    'Live fixtures synced · ' + new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+
+/* ---- Tabs ---- */
+/* ---- This Week (home) ----
+   Aggregates fixtures across all clubs + USMNT into one date-ordered view,
+   plus a digest summary and a "what I missed" recent-results block. */
+async function loadWeek(){
+  const ahead = document.getElementById('weekAhead');
+  const missed = document.getElementById('weekMissed');
+  const digestBox = document.getElementById('weekDigest');
+  const now = Date.now();
+  const weekFromNow = now + 7*24*60*60*1000;
+  const weekAgo = now - 7*24*60*60*1000;
+
+  const sources = [
+    ...CLUBS.map(c=>({ label:c.short, kind:'club', league:c.league, id:c.id, focus:c.name })),
+    { label:'USA', kind:'usa', league:'fifa.world', id:'660', focus:'USA', alt:['usa.1','660'] }
+  ];
+  const all = [];
+  await Promise.all(sources.map(async s=>{
+    try{
+      let evs = await fetchSchedule(s.league, s.id).catch(()=>null);
+      if((!evs||!evs.length) && s.alt) evs = await fetchSchedule(s.alt[0], s.alt[1]).catch(()=>[]);
+      (evs||[]).forEach(e=>{ e._tag=s.label; e._kind=s.kind; e._focus=s.focus; all.push(e); });
+    }catch(e){}
+  }));
+
+  const upcoming = all.filter(e=>{ const t=new Date(e.date).getTime(); return (e.state==='pre'||e.state==='in') && t>=now-3*3600*1000 && t<=weekFromNow; })
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const recent = all.filter(e=>{ const t=new Date(e.date).getTime(); return e.state==='post' && t>=weekAgo; })
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const usaUp = upcoming.filter(e=>e._kind==='usa').length;
+  const clubUp = upcoming.filter(e=>e._kind==='club').length;
+  const today = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  let line = '';
+  if(upcoming.length){
+    const next = upcoming[0]; const d=fmtDate(next.date);
+    line = `Next up: <strong>${next.home.name} v ${next.away.name}</strong> on ${d.full}.`;
+  } else { line = 'No fixtures in the next seven days — a quiet week across your teams.'; }
+  digestBox.innerHTML = `<div class="digest">
+    <div class="dlbl">Your week at a glance</div>
+    <div class="dhead">${today}</div>
+    <div class="dstats">
+      <div class="dstat"><div class="dv">${upcoming.length}</div><div class="dk">Fixtures ahead</div></div>
+      <div class="dstat"><div class="dv">${clubUp}</div><div class="dk">Club games</div></div>
+      <div class="dstat"><div class="dv">${usaUp}</div><div class="dk">USMNT games</div></div>
+      <div class="dstat"><div class="dv">${recent.length}</div><div class="dk">Recent results</div></div>
+    </div>
+    <div class="dline">${line}</div>
+  </div>`;
+
+  const tagged = (e)=>{
+    const base = fixtureCard(e, e._focus);
+    const tagClass = e._kind==='usa'?'usa':'club';
+    return base.replace('<div class="fx-main">', `<div class="fx-main"><span class="fx-tag ${tagClass}">${e._tag}</span>`);
+  };
+
+  ahead.innerHTML = upcoming.length ? upcoming.map(tagged).join('')
+    : `<div class="empty">No fixtures scheduled in the next 7 days.</div>`;
+  missed.innerHTML = recent.length ? recent.map(tagged).join('')
+    : `<div class="empty">No results in the last 7 days.</div>`;
+  stampUpdated();
+}
+
+const loaded = { week:false, clubs:false, usmnt:false, pool:false, pipeline:false, headed:false };
+function activateTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));
+  if(name==='week' && !loaded.week){ loadWeek(); loaded.week=true; }
+  if(name==='clubs' && !loaded.clubs){ renderClubSwitch(); loadClub(); loaded.clubs=true; }
+  if(name==='usmnt' && !loaded.usmnt){ loadUSMNT(); loadAction(); loadUSMNTNews(); loaded.usmnt=true; }
+  if(name==='pool' && !loaded.pool){ renderPool(); loaded.pool=true; }
+  if(name==='pipeline' && !loaded.pipeline){ renderPipeline(); loaded.pipeline=true; }
+  if(name==='headed' && !loaded.headed){ renderHeaded(); loaded.headed=true; }
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>activateTab(t.dataset.tab));
+
+/* ---- boot ---- */
+activateTab('week');
+</script>
+</body>
+</html>
