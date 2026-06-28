@@ -459,14 +459,11 @@
     <div class="section-head"><h2>Club Health</h2><span class="note" id="healthNote">Live · form, goals, trend</span></div>
     <div id="clubHealth"></div>
 
-    <div class="section-head"><h2>Competitions</h2><span class="note">Live · tournaments &amp; cups</span></div>
-    <div id="clubComps"></div>
-
-    <div class="section-head"><h2>Fixtures &amp; Results</h2><span class="note" id="clubLeagueNote"></span></div>
-    <div class="fixtures" id="clubFixtures"><div class="loading"><div class="spinner"></div>Pulling fixtures…</div></div>
-
     <div class="section-head"><h2>Transfer &amp; Club News</h2><span class="note">Live · auto-pulled headlines</span></div>
     <div class="feed" id="clubFeed"></div>
+
+    <div class="section-head"><h2>Injury &amp; Fitness Watch</h2><span class="note">Live · from headlines</span></div>
+    <div class="feed" id="clubInjuries"></div>
 
     <div class="section-head"><h2>Out On Loan</h2><span class="note">Live · from season page</span></div>
     <div class="pool-grid" id="clubLoans"></div>
@@ -475,11 +472,14 @@
     <div class="pool-grid" id="clubAcademy"></div>
     <div id="clubAcademyNews" style="margin-top:14px"></div>
 
+    <div class="section-head"><h2>Competitions</h2><span class="note">Live · tournaments &amp; cups</span></div>
+    <div id="clubComps"></div>
+
+    <div class="section-head"><h2>Fixtures &amp; Results</h2><span class="note" id="clubLeagueNote"></span></div>
+    <div class="fixtures" id="clubFixtures"><div class="loading"><div class="spinner"></div>Pulling fixtures…</div></div>
+
     <div class="section-head"><h2>Squad</h2><span class="note">Live · current first team</span></div>
     <div class="pool-grid" id="clubRoster"><div class="loading"><div class="spinner"></div>Pulling squad…</div></div>
-
-    <div class="section-head"><h2>Injury &amp; Fitness Watch</h2><span class="note">Live · from headlines</span></div>
-    <div class="feed" id="clubInjuries"></div>
   </section>
 
   <!-- ============ USMNT CENTRAL ============ -->
@@ -1160,39 +1160,63 @@ const rosterCache = {};
 async function loadRoster(c){
   const box = document.getElementById('clubRoster');
   box.innerHTML = `<div class="loading"><div class="spinner"></div>Pulling ${c.short} squad…</div>`;
-  try{
-    if(!rosterCache[c.key]){
-      const r = await fetch(`${ESPN}/${c.league}/teams/${c.id}/roster`);
-      if(!r.ok) throw new Error('roster '+r.status);
-      rosterCache[c.key] = await r.json();
-    }
-    const j = rosterCache[c.key];
-    // ESPN nests athletes either flat or grouped by position
-    let players = [];
-    if(Array.isArray(j.athletes)){
-      j.athletes.forEach(grp=>{
-        if(grp.items) players = players.concat(grp.items);
-        else if(grp.displayName || grp.fullName) players.push(grp);
+  // deep-flatten any of ESPN's roster shapes into a flat athlete array
+  const extract = (j)=>{
+    let out = [];
+    const pushAthlete = (a)=>{ if(a && (a.displayName||a.fullName||a.lastName)) out.push(a); };
+    const ath = j.athletes || j.roster || [];
+    if(Array.isArray(ath)){
+      ath.forEach(node=>{
+        if(!node) return;
+        if(node.items && Array.isArray(node.items)) node.items.forEach(it=> pushAthlete(it.athlete||it));
+        else if(node.athletes && Array.isArray(node.athletes)) node.athletes.forEach(it=> pushAthlete(it.athlete||it));
+        else if(node.athlete) pushAthlete(node.athlete);
+        else pushAthlete(node);
       });
     }
-    if(!players.length){ box.innerHTML = `<div class="empty">No squad returned for ${c.short} right now. ESPN updates rosters around season start.</div>`; return; }
-    // sort by position group then jersey number
+    return out;
+  };
+  // try several endpoints/params, return the first that yields players
+  const tries = [
+    `${ESPN}/${c.league}/teams/${c.id}/roster`,
+    `${ESPN}/${c.league}/teams/${c.id}/roster?enable=roster`,
+    `${ESPN}/${c.league}/teams/${c.id}?enable=roster`
+  ];
+  try{
+    let players = rosterCache[c.key];
+    if(!players){
+      for(const url of tries){
+        try{
+          const r = await fetch(url);
+          if(!r.ok) continue;
+          const j = await r.json();
+          const src = j.team || j; // the ?enable=roster on /teams/{id} nests under .team
+          const got = extract(src);
+          if(got.length){ players = got; break; }
+        }catch(e){ /* next */ }
+      }
+      if(players) rosterCache[c.key] = players;
+    }
+    if(!players || !players.length){
+      box.innerHTML = `<div class="empty">No squad returned for ${c.short} right now — ESPN often clears rosters between seasons and repopulates at preseason. The squad will appear automatically once it's back.</div>`;
+      return;
+    }
     const posRank = { G:0, D:1, M:2, F:3 };
     players.sort((a,b)=>{
-      const pa=posRank[(a.position?.abbreviation||'')[0]]??9, pb=posRank[(b.position?.abbreviation||'')[0]]??9;
+      const pa=posRank[(a.position?.abbreviation||a.position?.name||'')[0]]??9, pb=posRank[(b.position?.abbreviation||b.position?.name||'')[0]]??9;
       if(pa!==pb) return pa-pb;
       return (+a.jersey||99)-(+b.jersey||99);
     });
     box.innerHTML = players.map(p=>{
-      const name = p.displayName || p.fullName || 'Unknown';
-      const pos = p.position?.abbreviation || '';
+      const name = p.displayName || p.fullName || `${p.firstName||''} ${p.lastName||''}`.trim() || 'Unknown';
+      const pos = p.position?.abbreviation || (p.position?.name||'').slice(0,3).toUpperCase() || '';
       const num = p.jersey ? '#'+p.jersey : '';
       const age = p.age || '';
       const nat = p.citizenship || p.birthPlace?.country || '';
       return `<div class="pcard">
         ${pos?`<span class="pos">${pos}</span>`:''}
         <div class="pname">${name}</div>
-        <div class="pleague">${[num,nat].filter(Boolean).join(' · ')}</div>
+        ${(num||nat)?`<div class="pleague">${[num,nat].filter(Boolean).join(' · ')}</div>`:''}
         ${age?`<div class="pstat"><div class="s"><span class="v">${age}</span><span class="k">Age</span></div></div>`:''}
       </div>`;
     }).join('');
